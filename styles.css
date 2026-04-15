@@ -180,6 +180,19 @@ body::before {
   line-height: 1.5;
 }
 
+.creator-link-panel {
+  margin-top: 20px;
+}
+
+.creator-link-button {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  text-align: center;
+}
+
 .mode-button,
 .primary-button,
 .secondary-button {
@@ -650,6 +663,52 @@ body.proper-turtle-mode .status-row {
   margin: 0 0 10px;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.mode-emote-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.mode-emote-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.mode-emote-chip img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.mode-emote-copy {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.mode-emote-copy strong {
+  font-size: 0.92rem;
+}
+
+.mode-emote-copy span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.mode-emote-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
 }
 
 .graph-wrap {

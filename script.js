@@ -57,6 +57,7 @@ const scorePassRuns = document.getElementById("score-pass-runs");
 const graphCaption = document.getElementById("graph-caption");
 const scoreRunTable = document.getElementById("score-run-table");
 const openStatsButton = document.getElementById("open-stats-button");
+const runModeEmotes = document.getElementById("run-mode-emotes");
 const weakestRangeEl = document.getElementById("weakest-range");
 const weakestRangeDetailEl = document.getElementById("weakest-range-detail");
 const weakestTimeWindowEl = document.getElementById("weakest-time-window");
@@ -74,6 +75,7 @@ const speedChart = document.getElementById("speed-chart");
 const statusCards = document.querySelectorAll(".status-card");
 const isStatsPage = Boolean(document.querySelector(".stats-page-panel"));
 const statsModeLabel = document.getElementById("stats-mode-label");
+const statsModeEmotes = document.getElementById("stats-mode-emotes");
 const pastRunsModal = document.getElementById("past-runs-modal");
 const pastRunsListView = document.getElementById("past-runs-list-view");
 const pastRunDetailView = document.getElementById("past-run-detail-view");
@@ -82,6 +84,7 @@ const pastRunsFilterLabel = document.getElementById("past-runs-filter-label");
 const pastRunTitle = document.getElementById("past-run-title");
 const pastRunDate = document.getElementById("past-run-date");
 const pastRunChips = document.getElementById("past-run-chips");
+const pastRunModeEmotes = document.getElementById("past-run-mode-emotes");
 const pastRunChart = document.getElementById("past-run-chart");
 const pastRunStepsTable = document.getElementById("past-run-steps-table");
 
@@ -138,7 +141,14 @@ function loadPersistedStats() {
       return { runs: [] };
     }
 
-    return { runs: parsed.runs };
+    return {
+      runs: parsed.runs.map((run) => ({
+        ...run,
+        properTurtleMode: Boolean(run.properTurtleMode),
+        ghostMode: Boolean(run.ghostMode),
+        subtractionMode: Boolean(run.subtractionMode),
+      })),
+    };
   } catch {
     return { runs: [] };
   }
@@ -158,6 +168,119 @@ function formatDecimal(value) {
 
 function formatAverageMs(ms) {
   return `${(ms / 1000).toFixed(2)}s avg`;
+}
+
+function formatModeCount(count, totalRuns) {
+  if (!totalRuns) return "No saved runs";
+  if (count === totalRuns) return totalRuns === 1 ? "This run" : `All ${totalRuns} runs`;
+  return `${count} of ${totalRuns} runs`;
+}
+
+function getRunModeEmoteItems(run) {
+  if (!run) return [];
+
+  const items = [
+    {
+      src: run.subtractionMode ? "subtraction.png" : "addition.png",
+      alt: run.subtractionMode ? "Subtraction mode" : "Addition mode",
+      title: run.subtractionMode ? "Subtraction" : "Addition",
+      detail: "Current run",
+    },
+  ];
+
+  if (run.ghostMode) {
+    items.push({
+      src: "ghost.png",
+      alt: "Ghost mode",
+      title: "Ghost",
+      detail: "Total hidden",
+    });
+  }
+
+  if (run.properTurtleMode) {
+    items.push({
+      src: "assets/turtle_turtle.png",
+      alt: "Proper Turtle mode",
+      title: "Proper Turtle",
+      detail: "Triple rolls",
+    });
+  }
+
+  return items;
+}
+
+function getAggregateModeEmoteItems(runs) {
+  if (!Array.isArray(runs) || runs.length === 0) {
+    return [];
+  }
+
+  const totalRuns = runs.length;
+  const subtractionRuns = runs.filter((run) => Boolean(run.subtractionMode)).length;
+  const additionRuns = totalRuns - subtractionRuns;
+  const ghostRuns = runs.filter((run) => Boolean(run.ghostMode)).length;
+  const properRuns = runs.filter((run) => Boolean(run.properTurtleMode)).length;
+  const items = [];
+
+  if (additionRuns > 0) {
+    items.push({
+      src: "addition.png",
+      alt: "Addition mode runs",
+      title: "Addition",
+      detail: formatModeCount(additionRuns, totalRuns),
+    });
+  }
+
+  if (subtractionRuns > 0) {
+    items.push({
+      src: "subtraction.png",
+      alt: "Subtraction mode runs",
+      title: "Subtraction",
+      detail: formatModeCount(subtractionRuns, totalRuns),
+    });
+  }
+
+  if (ghostRuns > 0) {
+    items.push({
+      src: "ghost.png",
+      alt: "Ghost mode runs",
+      title: "Ghost",
+      detail: formatModeCount(ghostRuns, totalRuns),
+    });
+  }
+
+  if (properRuns > 0) {
+    items.push({
+      src: "assets/turtle_turtle.png",
+      alt: "Proper Turtle mode runs",
+      title: "Proper Turtle",
+      detail: formatModeCount(properRuns, totalRuns),
+    });
+  }
+
+  return items;
+}
+
+function renderModeEmoteBar(container, items, emptyText = "No saved mode data yet.") {
+  if (!container) return;
+
+  if (items.length === 0) {
+    container.innerHTML = `<p class="mode-emote-empty">${escapeHtml(emptyText)}</p>`;
+    return;
+  }
+
+  container.innerHTML = items
+    .map(
+      (item) => `
+        <div class="mode-emote-chip">
+          <img src="${escapeHtml(item.src)}" alt="${escapeHtml(item.alt)}" />
+          <div class="mode-emote-copy">
+            <strong>${escapeHtml(item.title)}</strong>
+            <span>${escapeHtml(item.detail)}</span>
+          </div>
+        </div>
+      `,
+    )
+    .join("");
 }
 
 function getCalcSpeed(totalSteps, totalTimeMs) {
@@ -399,6 +522,8 @@ function persistPassedRun(totalTimeMs) {
     completedAt: new Date().toISOString(),
     modeSides: state.modeSides,
     properTurtleMode: state.properTurtleMode,
+    ghostMode: state.ghostMode,
+    subtractionMode: isSubtractingMode(),
     target: state.target,
     total: state.total,
     totalTimeMs,
@@ -1124,6 +1249,15 @@ function openRunSummary(title, totalTimeMs) {
   scoreGrowthSpeed.textContent = `${formatDecimal(growthSpeed)} nums/s`;
   scorePassRuns.textContent = String(state.history.length);
   graphCaption.textContent = "Line graph shows seconds spent on each correct answer in this run.";
+  renderModeEmoteBar(
+    runModeEmotes,
+    getRunModeEmoteItems({
+      properTurtleMode: state.properTurtleMode,
+      ghostMode: state.ghostMode,
+      subtractionMode: isSubtractingMode(),
+    }),
+    "Run mode badges appear here.",
+  );
   renderRunRows(totalTimeMs);
   drawChart("run", { growthTimeline: [] });
   if (playAgainButton) {
@@ -1234,6 +1368,11 @@ function openPastRunDetail(run) {
 
   if (pastRunTitle) pastRunTitle.textContent = modeLabel;
   if (pastRunDate) pastRunDate.textContent = new Date(run.completedAt).toLocaleString();
+  renderModeEmoteBar(
+    pastRunModeEmotes,
+    getRunModeEmoteItems(run),
+    "Pass run mode badges appear here.",
+  );
 
   if (pastRunChips) {
     pastRunChips.innerHTML = `
@@ -1327,6 +1466,7 @@ function getFilterLabel(filter) {
 
 function renderStatsPage(filter) {
   const aggregated = aggregatePersistedStats(filter);
+  const filteredRuns = getFilteredRuns(filter);
 
   if (statsModeLabel) {
     statsModeLabel.textContent = getFilterLabel(filter);
@@ -1363,6 +1503,7 @@ function renderStatsPage(filter) {
     graphCaption.textContent =
       "Line graph shows the average total reached during each saved time window.";
   }
+  renderModeEmoteBar(statsModeEmotes, getAggregateModeEmoteItems(filteredRuns));
 
   updateInsightCard(
     weakestRangeEl,
@@ -1385,7 +1526,7 @@ function renderStatsPage(filter) {
   renderStatsRows(rangeStatsTable, aggregated.ranges.slice(0, 8), "No saved range stats yet.");
   renderStatsRows(timeStatsTable, aggregated.timeWindows.slice(0, 8), "No saved time-window stats yet.");
   renderStatsRows(digitStatsTable, aggregated.digitPairs.slice(0, 10), "No saved end-digit stats yet.");
-  renderSavedRuns(getFilteredRuns(filter));
+  renderSavedRuns(filteredRuns);
   drawChart("stats", aggregated);
 }
 
