@@ -34,7 +34,7 @@ body::before {
   inset: -20%;
   opacity: 0;
   pointer-events: none;
-  background-image: url("turtle_headphone.png");
+  background-image: url("assets/turtle_headphone.png");
   background-repeat: repeat;
   background-size: 220px auto;
   background-position: 0 0;
@@ -555,20 +555,7 @@ body.proper-turtle-mode .status-row {
   transform: scale(1.01);
 }
 
-.modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(3, 8, 12, 0.68);
-  display: grid;
-  place-items: center;
-  padding: 20px;
-}
-
-.modal-card {
-  width: min(900px, 100%);
-  background: rgba(10, 18, 24, 0.96);
-  border-radius: 28px;
-  box-shadow: var(--shadow);
+.score-panel {
   padding: 28px;
 }
 
@@ -768,6 +755,58 @@ body.proper-turtle-mode .status-row {
 
 .hidden {
   display: none;
+}
+
+/* Past Runs Modal */
+.past-runs-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 32px 16px 48px;
+  overflow-y: auto;
+}
+
+.past-runs-modal.hidden {
+  display: none;
+}
+
+.past-runs-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: -1;
+}
+
+.past-runs-panel {
+  width: min(860px, 100%);
+  padding: 28px;
+  position: relative;
+}
+
+.past-runs-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.past-runs-modal-header h2 {
+  margin: 0 0 2px;
+  font-size: clamp(1.3rem, 2.5vw, 1.8rem);
+}
+
+.stats-row.run-list-row {
+  cursor: pointer;
+  transition: background 100ms, border-color 100ms;
+}
+
+.stats-row.run-list-row:hover {
+  background: rgba(47, 207, 143, 0.08);
+  border-color: rgba(47, 207, 143, 0.25);
 }
 
 @keyframes success-flash {

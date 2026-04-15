@@ -25,6 +25,7 @@
             </p>
           </div>
           <div class="button-row">
+            <button class="secondary-button" id="open-past-runs-button">Past Runs</button>
             <a class="secondary-button stats-link-button" href="index.html">Back To Game</a>
           </div>
         </div>
@@ -125,6 +126,45 @@
         </div>
       </section>
     </main>
+
+    <div id="past-runs-modal" class="past-runs-modal hidden" role="dialog" aria-modal="true" aria-label="Past Runs">
+      <div class="past-runs-backdrop" id="past-runs-backdrop"></div>
+      <div class="past-runs-panel panel">
+
+        <!-- List view -->
+        <div id="past-runs-list-view">
+          <div class="past-runs-modal-header">
+            <div>
+              <h2>Past Runs</h2>
+              <p class="stats-mode-label" id="past-runs-filter-label"></p>
+            </div>
+            <button class="secondary-button" id="close-past-runs-button">Close</button>
+          </div>
+          <div class="stats-table" id="past-runs-list"></div>
+        </div>
+
+        <!-- Detail view -->
+        <div id="past-run-detail-view" class="hidden">
+          <div class="past-runs-modal-header">
+            <div>
+              <h2 id="past-run-title"></h2>
+              <p class="stats-mode-label" id="past-run-date"></p>
+            </div>
+            <div class="button-row">
+              <button class="secondary-button" id="back-to-runs-button">← Back</button>
+              <button class="secondary-button" id="close-past-run-detail-button">Close</button>
+            </div>
+          </div>
+          <div class="score-grid" id="past-run-chips"></div>
+          <div class="graph-wrap" style="margin-top:16px">
+            <canvas id="past-run-chart" width="720" height="260" aria-label="Run chart"></canvas>
+          </div>
+          <p class="graph-caption">Seconds spent on each correct answer in this run.</p>
+          <div class="stats-table" id="past-run-steps-table"></div>
+        </div>
+
+      </div>
+    </div>
 
     <script src="script.js"></script>
   </body>

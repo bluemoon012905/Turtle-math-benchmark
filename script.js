@@ -44,6 +44,7 @@ const mobileKeypadButton = document.getElementById("mobile-keypad-button");
 const keypadWrap = document.getElementById("keypad-wrap");
 const keypadButtons = document.querySelectorAll(".keypad-button");
 const scoreModal = document.getElementById("score-modal");
+const gameLayout = document.querySelector(".game-layout");
 const modalTitle = document.getElementById("modal-title");
 const scoreTargetLabel = document.getElementById("score-target-label");
 const scoreTarget = document.getElementById("score-target");
@@ -73,6 +74,16 @@ const speedChart = document.getElementById("speed-chart");
 const statusCards = document.querySelectorAll(".status-card");
 const isStatsPage = Boolean(document.querySelector(".stats-page-panel"));
 const statsModeLabel = document.getElementById("stats-mode-label");
+const pastRunsModal = document.getElementById("past-runs-modal");
+const pastRunsListView = document.getElementById("past-runs-list-view");
+const pastRunDetailView = document.getElementById("past-run-detail-view");
+const pastRunsList = document.getElementById("past-runs-list");
+const pastRunsFilterLabel = document.getElementById("past-runs-filter-label");
+const pastRunTitle = document.getElementById("past-run-title");
+const pastRunDate = document.getElementById("past-run-date");
+const pastRunChips = document.getElementById("past-run-chips");
+const pastRunChart = document.getElementById("past-run-chart");
+const pastRunStepsTable = document.getElementById("past-run-steps-table");
 
 const STATS_STORAGE_KEY = "turtle-math-stats-v1";
 const MAX_SAVED_RUNS = 40;
@@ -652,7 +663,7 @@ async function toggleFullscreen() {
 
 function applyProperModeTheme() {
   document.body.classList.toggle("proper-turtle-mode", state.properTurtleMode);
-  const turtleSrc = state.properTurtleMode ? "turtle_turtle.png" : "turtle.png";
+  const turtleSrc = state.properTurtleMode ? "assets/turtle_turtle.png" : "assets/turtle.png";
 
   if (properModeToggle) {
     properModeToggle.setAttribute("aria-pressed", String(state.properTurtleMode));
@@ -902,7 +913,7 @@ function hideScoreboard() {
   }
 
   scoreModal.classList.add("hidden");
-  scoreModal.setAttribute("aria-hidden", "true");
+  if (gameLayout) gameLayout.classList.remove("hidden");
 }
 
 function renderRunRows(totalTimeMs) {
@@ -1121,8 +1132,191 @@ function openRunSummary(title, totalTimeMs) {
   if (changeModeButton) {
     changeModeButton.classList.remove("hidden");
   }
+  if (gameLayout) gameLayout.classList.add("hidden");
   scoreModal.classList.remove("hidden");
-  scoreModal.setAttribute("aria-hidden", "false");
+}
+
+function drawRunChart(canvas, steps) {
+  if (!canvas || steps.length === 0) return;
+
+  const ctx = canvas.getContext("2d");
+  const { width, height } = canvas;
+  const pad = { top: 20, right: 20, bottom: 36, left: 46 };
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#0d1720";
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.strokeStyle = "rgba(255,255,255,0.08)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad.left, pad.top);
+  ctx.lineTo(pad.left, height - pad.bottom);
+  ctx.lineTo(width - pad.right, height - pad.bottom);
+  ctx.stroke();
+
+  const maxX = Math.max(...steps.map((s) => s.toTotal), 1);
+  const maxY = Math.max(...steps.map((s) => s.stepMs), 1000);
+
+  const plotPoints = steps.map((s) => ({
+    x: pad.left + (s.toTotal / maxX) * (width - pad.left - pad.right),
+    y: height - pad.bottom - (s.stepMs / maxY) * (height - pad.top - pad.bottom),
+  }));
+
+  ctx.strokeStyle = "#2fcf8f";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  plotPoints.forEach((p, i) => {
+    if (i === 0) ctx.moveTo(p.x, p.y);
+    else ctx.lineTo(p.x, p.y);
+  });
+  ctx.stroke();
+
+  plotPoints.forEach((p) => {
+    ctx.fillStyle = "#63f4b0";
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  ctx.fillStyle = "#95aab3";
+  ctx.font = "14px Roboto";
+  ctx.fillText("Total reached", width / 2 - 28, height - 10);
+  ctx.save();
+  ctx.translate(16, height / 2 + 20);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText("Seconds for answer", 0, 0);
+  ctx.restore();
+  ctx.fillText("0", pad.left - 8, height - pad.bottom + 18);
+  ctx.fillText(String(maxX), width - pad.right - 12, height - pad.bottom + 18);
+  ctx.fillText(`${(maxY / 1000).toFixed(1)}s`, 4, pad.top + 6);
+}
+
+function renderPastRunSteps(el, steps, totalTimeMs) {
+  if (!el) return;
+
+  if (steps.length === 0) {
+    el.innerHTML = '<p class="stats-empty">No steps recorded for this run.</p>';
+    return;
+  }
+
+  const averageStepMs = totalTimeMs > 0 ? totalTimeMs / steps.length : 0;
+
+  el.innerHTML = steps
+    .map((step, index) => {
+      const direction = step.growth >= 0 ? "+" : "−";
+      const growthValue = Math.abs(step.growth);
+      const diff = averageStepMs > 0 ? step.stepMs - averageStepMs : 0;
+      let paceText = "on pace";
+      if (diff > 150) paceText = `${(diff / 1000).toFixed(1)}s slower than avg`;
+      else if (diff < -150) paceText = `${(Math.abs(diff) / 1000).toFixed(1)}s faster than avg`;
+
+      return `
+        <div class="stats-row">
+          <strong>Step ${index + 1}: ${escapeHtml(String(step.fromTotal))} ${direction} ${escapeHtml(String(growthValue))} = ${escapeHtml(String(step.toTotal))}</strong>
+          <span>${formatSeconds(step.stepMs)} answer time</span>
+          <span>${paceText}</span>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function openPastRunDetail(run) {
+  if (!pastRunsListView || !pastRunDetailView) return;
+
+  pastRunsListView.classList.add("hidden");
+  pastRunDetailView.classList.remove("hidden");
+
+  const modeLabel = run.properTurtleMode ? `D${run.modeSides} Proper Turtle` : `D${run.modeSides}`;
+  const calcSpeed = getCalcSpeed(run.steps.length, run.totalTimeMs);
+  const growthSpeed = getGrowthSpeed(run.total, run.totalTimeMs);
+
+  if (pastRunTitle) pastRunTitle.textContent = modeLabel;
+  if (pastRunDate) pastRunDate.textContent = new Date(run.completedAt).toLocaleString();
+
+  if (pastRunChips) {
+    pastRunChips.innerHTML = `
+      <div class="score-chip">
+        <span class="status-label">Final Total</span>
+        <strong>${escapeHtml(String(run.total))} / ${escapeHtml(String(run.target))}</strong>
+      </div>
+      <div class="score-chip">
+        <span class="status-label">Run Time</span>
+        <strong>${formatSeconds(run.totalTimeMs)}</strong>
+      </div>
+      <div class="score-chip">
+        <span class="status-label">Calc Speed</span>
+        <strong>${formatDecimal(calcSpeed)} calcs/s</strong>
+      </div>
+      <div class="score-chip">
+        <span class="status-label">Growth Speed</span>
+        <strong>${formatDecimal(growthSpeed)} nums/s</strong>
+      </div>
+      <div class="score-chip">
+        <span class="status-label">Steps</span>
+        <strong>${run.steps.length}</strong>
+      </div>
+    `;
+  }
+
+  if (pastRunChart) {
+    window.requestAnimationFrame(() => drawRunChart(pastRunChart, run.steps));
+  }
+
+  renderPastRunSteps(pastRunStepsTable, run.steps, run.totalTimeMs);
+}
+
+function renderPastRunsList(runs) {
+  if (!pastRunsList) return;
+
+  if (runs.length === 0) {
+    pastRunsList.innerHTML = '<p class="stats-empty">No runs for this filter yet.</p>';
+    return;
+  }
+
+  pastRunsList.innerHTML = runs
+    .slice()
+    .reverse()
+    .map((run, index) => {
+      const modeLabel = run.properTurtleMode ? `D${run.modeSides} Proper` : `D${run.modeSides}`;
+      const calcSpeed = getCalcSpeed(run.steps.length, run.totalTimeMs);
+      const date = new Date(run.completedAt).toLocaleString();
+      const originalIndex = runs.length - 1 - index;
+
+      return `
+        <div class="stats-row run-list-row" data-run-index="${originalIndex}">
+          <strong>${escapeHtml(modeLabel)}</strong>
+          <span>${escapeHtml(date)}</span>
+          <span>${formatSeconds(run.totalTimeMs)}</span>
+          <span>${formatDecimal(calcSpeed)} calcs/s · ${run.steps.length} steps</span>
+        </div>
+      `;
+    })
+    .join("");
+
+  // Store the current runs array on the element so the delegated handler can read it
+  pastRunsList._runs = runs;
+}
+
+function openPastRunsModal() {
+  if (!pastRunsModal || !pastRunsListView || !pastRunDetailView) return;
+
+  const runs = getFilteredRuns(statsFilter);
+
+  pastRunsListView.classList.remove("hidden");
+  pastRunDetailView.classList.add("hidden");
+  if (pastRunsFilterLabel) pastRunsFilterLabel.textContent = getFilterLabel(statsFilter);
+  renderPastRunsList(runs);
+
+  pastRunsModal.classList.remove("hidden");
+  pastRunsModal.setAttribute("aria-hidden", "false");
+}
+
+function closePastRunsModal() {
+  if (!pastRunsModal) return;
+  pastRunsModal.classList.add("hidden");
+  pastRunsModal.setAttribute("aria-hidden", "true");
 }
 
 function getFilterLabel(filter) {
@@ -1396,9 +1590,6 @@ if (!isStatsPage) {
       );
     });
   }
-  if (closeScoreButton) {
-    closeScoreButton.addEventListener("click", hideScoreboard);
-  }
   if (keypadWrap) {
     keypadWrap.addEventListener("click", (event) => {
       const button = event.target.closest(".keypad-button");
@@ -1467,6 +1658,49 @@ if (!isStatsPage) {
       statsFilter = raw === "" ? null : raw;
       renderStatsPage(statsFilter);
     });
+  });
+
+  if (pastRunsList) {
+    pastRunsList.addEventListener("click", (e) => {
+      const row = e.target.closest(".run-list-row");
+      if (!row || !pastRunsList._runs) return;
+      const idx = Number.parseInt(row.dataset.runIndex, 10);
+      openPastRunDetail(pastRunsList._runs[idx]);
+    });
+  }
+
+  const openPastRunsButton = document.getElementById("open-past-runs-button");
+  if (openPastRunsButton) {
+    openPastRunsButton.addEventListener("click", openPastRunsModal);
+  }
+
+  const closePastRunsButton = document.getElementById("close-past-runs-button");
+  if (closePastRunsButton) {
+    closePastRunsButton.addEventListener("click", closePastRunsModal);
+  }
+
+  const closePastRunDetailButton = document.getElementById("close-past-run-detail-button");
+  if (closePastRunDetailButton) {
+    closePastRunDetailButton.addEventListener("click", closePastRunsModal);
+  }
+
+  const backToRunsButton = document.getElementById("back-to-runs-button");
+  if (backToRunsButton) {
+    backToRunsButton.addEventListener("click", () => {
+      if (pastRunDetailView) pastRunDetailView.classList.add("hidden");
+      if (pastRunsListView) pastRunsListView.classList.remove("hidden");
+    });
+  }
+
+  const pastRunsBackdrop = document.getElementById("past-runs-backdrop");
+  if (pastRunsBackdrop) {
+    pastRunsBackdrop.addEventListener("click", closePastRunsModal);
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && pastRunsModal && !pastRunsModal.classList.contains("hidden")) {
+      closePastRunsModal();
+    }
   });
 
   renderStatsPage(statsFilter);

@@ -80,15 +80,51 @@
           </div>
         </div>
         <div class="turtle-wrap">
-          <img src="turtle.png" alt="Game turtle" class="turtle-art" id="mode-turtle-art" />
+          <img src="assets/turtle.png" alt="Game turtle" class="turtle-art" id="mode-turtle-art" />
         </div>
       </section>
 
       <section class="panel game-panel hidden" id="game-screen">
+        <div class="score-panel hidden" id="score-modal">
+          <p class="eyebrow" id="modal-title">Run Complete</p>
+          <div class="score-grid">
+            <div class="score-chip">
+              <span class="status-label" id="score-target-label">Target</span>
+              <strong id="score-target">50</strong>
+            </div>
+            <div class="score-chip">
+              <span class="status-label" id="score-time-label">Total Time</span>
+              <strong id="score-time">0.0s</strong>
+            </div>
+            <div class="score-chip">
+              <span class="status-label">Calc Speed</span>
+              <strong id="score-calc-speed">0.00 calcs/s</strong>
+            </div>
+            <div class="score-chip">
+              <span class="status-label">Growth Speed</span>
+              <strong id="score-growth-speed">0.00 nums/s</strong>
+            </div>
+            <div class="score-chip">
+              <span class="status-label">Saved Pass Runs</span>
+              <strong id="score-pass-runs">0</strong>
+            </div>
+          </div>
+          <div class="graph-wrap">
+            <canvas id="speed-chart" width="720" height="320"></canvas>
+          </div>
+          <p class="graph-caption" id="graph-caption">
+            Line graph shows how long each successful step took.
+          </p>
+          <div class="button-row">
+            <button type="button" class="primary-button" id="play-again-button">Play Again</button>
+            <button type="button" class="secondary-button" id="change-mode-button">Change Mode</button>
+          </div>
+        </div>
+
         <div class="game-layout">
           <aside class="turtle-side">
             <div class="turtle-confetti-layer" id="turtle-confetti-layer" aria-hidden="true"></div>
-            <img src="turtle.png" alt="Game turtle" class="turtle-art" id="game-turtle-art" />
+            <img src="assets/turtle.png" alt="Game turtle" class="turtle-art" id="game-turtle-art" />
           </aside>
 
           <div class="game-main">
@@ -200,45 +236,6 @@
       </section>
 
       <div class="win-confetti-layer" id="win-confetti-layer" aria-hidden="true"></div>
-
-      <section class="modal hidden" id="score-modal" aria-hidden="true">
-        <div class="modal-card">
-          <p class="eyebrow">Run Complete</p>
-          <h2 id="modal-title">Scoreboard</h2>
-          <div class="score-grid">
-            <div class="score-chip">
-              <span class="status-label" id="score-target-label">Target</span>
-              <strong id="score-target">50</strong>
-            </div>
-            <div class="score-chip">
-              <span class="status-label" id="score-time-label">Total Time</span>
-              <strong id="score-time">0.0s</strong>
-            </div>
-            <div class="score-chip">
-              <span class="status-label">Calc Speed</span>
-              <strong id="score-calc-speed">0.00 calcs/s</strong>
-            </div>
-            <div class="score-chip">
-              <span class="status-label">Growth Speed</span>
-              <strong id="score-growth-speed">0.00 nums/s</strong>
-            </div>
-            <div class="score-chip">
-              <span class="status-label">Saved Pass Runs</span>
-              <strong id="score-pass-runs">0</strong>
-            </div>
-          </div>
-          <div class="graph-wrap">
-            <canvas id="speed-chart" width="720" height="320"></canvas>
-          </div>
-          <p class="graph-caption" id="graph-caption">
-            Line graph shows how long each successful step took.
-          </p>
-          <div class="button-row">
-            <button type="button" class="primary-button" id="play-again-button">Play Again</button>
-            <button type="button" class="secondary-button" id="change-mode-button">Change Mode</button>
-          </div>
-        </div>
-      </section>
     </main>
 
     <script src="script.js"></script>
