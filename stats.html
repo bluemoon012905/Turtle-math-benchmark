@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Turtle Math Stats</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell app-shell-top">
+      <section class="panel stats-page-panel">
+        <div class="stats-page-header">
+          <div>
+            <p class="eyebrow">Turtle Math</p>
+            <h1>Practice Stats</h1>
+            <p class="intro">
+              Saved pass runs for this device, including calculation speed, growth speed,
+              number-range weak spots, time-window weak spots, and end-digit timing.
+            </p>
+          </div>
+          <div class="button-row">
+            <a class="secondary-button stats-link-button" href="index.html">Back To Game</a>
+          </div>
+        </div>
+
+        <div class="score-grid">
+          <div class="score-chip">
+            <span class="status-label" id="score-target-label">Saved Runs</span>
+            <strong id="score-target">0 pass runs</strong>
+          </div>
+          <div class="score-chip">
+            <span class="status-label" id="score-time-label">Saved Time</span>
+            <strong id="score-time">0.0s</strong>
+          </div>
+          <div class="score-chip">
+            <span class="status-label">Calc Speed</span>
+            <strong id="score-calc-speed">0.00 calcs/s</strong>
+          </div>
+          <div class="score-chip">
+            <span class="status-label">Growth Speed</span>
+            <strong id="score-growth-speed">0.00 nums/s</strong>
+          </div>
+          <div class="score-chip">
+            <span class="status-label">Saved Pass Runs</span>
+            <strong id="score-pass-runs">0</strong>
+          </div>
+        </div>
+
+        <div class="graph-wrap">
+          <canvas id="speed-chart" width="720" height="320"></canvas>
+        </div>
+        <p class="graph-caption" id="graph-caption">
+          Line graph shows the average total reached during each saved time window.
+        </p>
+
+        <div class="insight-grid">
+          <div class="insight-card">
+            <span class="status-label">Weakest Range</span>
+            <strong id="weakest-range">No saved data</strong>
+            <p id="weakest-range-detail">Finish a pass run to build range stats.</p>
+          </div>
+          <div class="insight-card">
+            <span class="status-label">Weakest Time Window</span>
+            <strong id="weakest-time-window">No saved data</strong>
+            <p id="weakest-time-window-detail">Finish a pass run to build time stats.</p>
+          </div>
+          <div class="insight-card">
+            <span class="status-label">Slowest End Digits</span>
+            <strong id="weakest-digit-pair">No saved data</strong>
+            <p id="weakest-digit-pair-detail">Finish a pass run to build digit-pair stats.</p>
+          </div>
+        </div>
+
+        <div class="stats-detail-grid">
+          <section class="stats-card">
+            <div class="stats-card-header">
+              <h3>By Number Range</h3>
+              <span class="status-label">Average time per correct answer</span>
+            </div>
+            <div class="stats-table" id="range-stats-table"></div>
+          </section>
+          <section class="stats-card">
+            <div class="stats-card-header">
+              <h3>By Time Window</h3>
+              <span class="status-label">Average time during each run segment</span>
+            </div>
+            <div class="stats-table" id="time-stats-table"></div>
+          </section>
+          <section class="stats-card">
+            <div class="stats-card-header">
+              <h3>By End Digits</h3>
+              <span class="status-label">Ones digit of current total + roll total</span>
+            </div>
+            <div class="stats-table" id="digit-stats-table"></div>
+          </section>
+          <section class="stats-card">
+            <div class="stats-card-header">
+              <h3>Saved Pass Runs</h3>
+              <span class="status-label">Stored on this device only</span>
+            </div>
+            <div class="stats-table" id="saved-runs-table"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>

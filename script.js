@@ -29,6 +29,11 @@ const properRollDieEls = [
 const messageBox = document.getElementById("message-box");
 const startButton = document.getElementById("start-button");
 const fullscreenButton = document.getElementById("fullscreen-button");
+const ghostModeToggle = document.getElementById("ghost-mode-toggle");
+const subtractionModeToggle = document.getElementById("subtraction-mode-toggle");
+const negativeHalfwayToggle = document.getElementById("negative-halfway-toggle");
+const currentTotalCard = document.getElementById("current-total-card");
+const currentTotalLabelEl = document.getElementById("current-total-label");
 const restartButton = document.getElementById("restart-button");
 const answerForm = document.getElementById("answer-form");
 const answerInput = document.getElementById("answer-input");
@@ -40,14 +45,36 @@ const keypadWrap = document.getElementById("keypad-wrap");
 const keypadButtons = document.querySelectorAll(".keypad-button");
 const scoreModal = document.getElementById("score-modal");
 const modalTitle = document.getElementById("modal-title");
+const scoreTargetLabel = document.getElementById("score-target-label");
 const scoreTarget = document.getElementById("score-target");
+const scoreTimeLabel = document.getElementById("score-time-label");
 const scoreTime = document.getElementById("score-time");
-const scoreSpeed = document.getElementById("score-speed");
+const scoreCalcSpeed = document.getElementById("score-calc-speed");
+const scoreGrowthSpeed = document.getElementById("score-growth-speed");
+const scorePassRuns = document.getElementById("score-pass-runs");
 const graphCaption = document.getElementById("graph-caption");
+const openStatsButton = document.getElementById("open-stats-button");
+const weakestRangeEl = document.getElementById("weakest-range");
+const weakestRangeDetailEl = document.getElementById("weakest-range-detail");
+const weakestTimeWindowEl = document.getElementById("weakest-time-window");
+const weakestTimeWindowDetailEl = document.getElementById("weakest-time-window-detail");
+const weakestDigitPairEl = document.getElementById("weakest-digit-pair");
+const weakestDigitPairDetailEl = document.getElementById("weakest-digit-pair-detail");
+const rangeStatsTable = document.getElementById("range-stats-table");
+const timeStatsTable = document.getElementById("time-stats-table");
+const digitStatsTable = document.getElementById("digit-stats-table");
+const savedRunsTable = document.getElementById("saved-runs-table");
+const closeScoreButton = document.getElementById("close-score-button");
 const playAgainButton = document.getElementById("play-again-button");
 const changeModeButton = document.getElementById("change-mode-button");
 const speedChart = document.getElementById("speed-chart");
 const statusCards = document.querySelectorAll(".status-card");
+const isStatsPage = Boolean(document.querySelector(".stats-page-panel"));
+
+const STATS_STORAGE_KEY = "turtle-math-stats-v1";
+const MAX_SAVED_RUNS = 40;
+const RANGE_BUCKET_SIZE = 10;
+const TIME_BUCKET_MS = 15000;
 
 const TARGETS = {
   4: 35,
@@ -59,8 +86,12 @@ const TARGETS = {
 const state = {
   modeSides: null,
   properTurtleMode: false,
+  ghostMode: false,
+  subtractionMode: false,
+  negativeHalfwayMode: false,
   volume: 0.45,
   target: 50,
+  startTotal: 0,
   total: 0,
   currentRolls: [],
   waitingForAnswer: false,
@@ -70,13 +101,287 @@ const state = {
   history: [],
   rollTimerId: null,
   nextRollTimerId: null,
+  scoreboardMode: "run",
 };
 
 let audioContext = null;
 let masterGainNode = null;
+let persistedStats = loadPersistedStats();
+
+function loadPersistedStats() {
+  try {
+    const raw = window.localStorage.getItem(STATS_STORAGE_KEY);
+
+    if (!raw) {
+      return { runs: [] };
+    }
+
+    const parsed = JSON.parse(raw);
+
+    if (!parsed || !Array.isArray(parsed.runs)) {
+      return { runs: [] };
+    }
+
+    return { runs: parsed.runs };
+  } catch {
+    return { runs: [] };
+  }
+}
+
+function savePersistedStats() {
+  try {
+    window.localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(persistedStats));
+  } catch {
+    // Ignore storage failures so play still works even if local storage is unavailable.
+  }
+}
+
+function formatDecimal(value) {
+  return Number.isFinite(value) ? value.toFixed(2) : "0.00";
+}
+
+function formatAverageMs(ms) {
+  return `${(ms / 1000).toFixed(2)}s avg`;
+}
+
+function getCalcSpeed(totalSteps, totalTimeMs) {
+  if (totalTimeMs <= 0) {
+    return 0;
+  }
+
+  return totalSteps / (totalTimeMs / 1000);
+}
+
+function getGrowthSpeed(totalNumbers, totalTimeMs) {
+  if (totalTimeMs <= 0) {
+    return 0;
+  }
+
+  return totalNumbers / (totalTimeMs / 1000);
+}
+
+function getRangeBucketIndex(fromTotal) {
+  return Math.floor(fromTotal / RANGE_BUCKET_SIZE);
+}
+
+function getRangeLabel(rangeIndex) {
+  const start = rangeIndex * RANGE_BUCKET_SIZE;
+  const end = start + RANGE_BUCKET_SIZE - 1;
+  return `${start}-${end}`;
+}
+
+function getTimeBucketIndex(elapsedMs) {
+  return Math.floor(elapsedMs / TIME_BUCKET_MS);
+}
+
+function getTimeBucketLabel(timeBucketIndex) {
+  const start = Math.floor((timeBucketIndex * TIME_BUCKET_MS) / 1000);
+  const end = Math.floor(((timeBucketIndex + 1) * TIME_BUCKET_MS) / 1000) - 1;
+  return `${start}-${end}s`;
+}
+
+function createBucketSummary(label) {
+  return {
+    label,
+    attempts: 0,
+    totalMs: 0,
+    totalGrowth: 0,
+  };
+}
+
+function addToBucket(collection, key, label, stepMs, growth) {
+  if (!collection.has(key)) {
+    collection.set(key, createBucketSummary(label));
+  }
+
+  const bucket = collection.get(key);
+  bucket.attempts += 1;
+  bucket.totalMs += stepMs;
+  bucket.totalGrowth += growth;
+}
+
+function finalizeBucketSummaries(collection) {
+  return Array.from(collection.values())
+    .map((bucket) => ({
+      ...bucket,
+      averageMs: bucket.attempts > 0 ? bucket.totalMs / bucket.attempts : 0,
+      growthSpeed: getGrowthSpeed(bucket.totalGrowth, bucket.totalMs),
+    }))
+    .sort((left, right) => right.averageMs - left.averageMs);
+}
+
+function aggregatePersistedStats() {
+  const rangeBuckets = new Map();
+  const timeBuckets = new Map();
+  const digitBuckets = new Map();
+  const growthTimeline = new Map();
+  let totalSteps = 0;
+  let totalNumbers = 0;
+  let totalTimeMs = 0;
+
+  persistedStats.runs.forEach((run) => {
+    totalSteps += run.steps.length;
+    totalNumbers += run.total;
+    totalTimeMs += run.totalTimeMs;
+
+    run.steps.forEach((step) => {
+      addToBucket(
+        rangeBuckets,
+        step.rangeBucketIndex,
+        getRangeLabel(step.rangeBucketIndex),
+        step.stepMs,
+        step.growth,
+      );
+      addToBucket(
+        timeBuckets,
+        step.timeBucketIndex,
+        getTimeBucketLabel(step.timeBucketIndex),
+        step.stepMs,
+        step.growth,
+      );
+      addToBucket(
+        digitBuckets,
+        step.endDigitPair,
+        step.endDigitPair,
+        step.stepMs,
+        step.growth,
+      );
+
+      if (!growthTimeline.has(step.timeBucketIndex)) {
+        growthTimeline.set(step.timeBucketIndex, {
+          label: getTimeBucketLabel(step.timeBucketIndex),
+          totalReached: 0,
+          attempts: 0,
+        });
+      }
+
+      const timePoint = growthTimeline.get(step.timeBucketIndex);
+      timePoint.totalReached += step.toTotal;
+      timePoint.attempts += 1;
+    });
+  });
+
+  return {
+    runCount: persistedStats.runs.length,
+    totalSteps,
+    totalNumbers,
+    totalTimeMs,
+    calcSpeed: getCalcSpeed(totalSteps, totalTimeMs),
+    growthSpeed: getGrowthSpeed(totalNumbers, totalTimeMs),
+    ranges: finalizeBucketSummaries(rangeBuckets),
+    timeWindows: finalizeBucketSummaries(timeBuckets),
+    digitPairs: finalizeBucketSummaries(digitBuckets),
+    growthTimeline: Array.from(growthTimeline.entries())
+      .sort((left, right) => left[0] - right[0])
+      .map(([, value]) => ({
+        label: value.label,
+        averageReached: value.attempts > 0 ? value.totalReached / value.attempts : 0,
+      })),
+  };
+}
+
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (character) => {
+    const entities = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+
+    return entities[character];
+  });
+}
+
+function renderStatsRows(container, rows, emptyText) {
+  if (rows.length === 0) {
+    container.innerHTML = `<p class="stats-empty">${escapeHtml(emptyText)}</p>`;
+    return;
+  }
+
+  container.innerHTML = rows
+    .map(
+      (row) => `
+        <div class="stats-row">
+          <strong>${escapeHtml(row.label)}</strong>
+          <span>${formatAverageMs(row.averageMs)}</span>
+          <span>${formatDecimal(row.growthSpeed)} nums/s</span>
+          <span>${row.attempts} tries</span>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function renderSavedRuns() {
+  if (persistedStats.runs.length === 0) {
+    savedRunsTable.innerHTML =
+      '<p class="stats-empty">No pass runs saved on this device yet.</p>';
+    return;
+  }
+
+  savedRunsTable.innerHTML = persistedStats.runs
+    .slice()
+    .reverse()
+    .map((run) => {
+      const calcSpeed = getCalcSpeed(run.steps.length, run.totalTimeMs);
+      const growthSpeed = getGrowthSpeed(run.total, run.totalTimeMs);
+      const date = new Date(run.completedAt).toLocaleString();
+      const modeLabelText = run.properTurtleMode ? `D${run.modeSides} Proper` : `D${run.modeSides}`;
+
+      return `
+        <div class="stats-row">
+          <strong>${escapeHtml(modeLabelText)}</strong>
+          <span>${escapeHtml(date)}</span>
+          <span>${formatSeconds(run.totalTimeMs)}</span>
+          <span>${formatDecimal(calcSpeed)} calcs/s | ${formatDecimal(growthSpeed)} nums/s</span>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function updateInsightCard(titleEl, detailEl, summary, fallback) {
+  if (!summary) {
+    titleEl.textContent = "No saved data";
+    detailEl.textContent = fallback;
+    return;
+  }
+
+  titleEl.textContent = summary.label;
+  detailEl.textContent = `${formatAverageMs(summary.averageMs)} • ${formatDecimal(summary.growthSpeed)} nums/s • ${summary.attempts} tries`;
+}
+
+function persistPassedRun(totalTimeMs) {
+  const run = {
+    completedAt: new Date().toISOString(),
+    modeSides: state.modeSides,
+    properTurtleMode: state.properTurtleMode,
+    target: state.target,
+    total: state.total,
+    totalTimeMs,
+    steps: state.history.map((step) => ({ ...step })),
+  };
+
+  persistedStats.runs.push(run);
+  persistedStats.runs = persistedStats.runs.slice(-MAX_SAVED_RUNS);
+  savePersistedStats();
+}
+
+function isSubtractingMode() {
+  return state.subtractionMode || state.negativeHalfwayMode;
+}
+
+function getBaseTarget(sides) {
+  return TARGETS[sides] * (state.properTurtleMode ? 2 : 1);
+}
 
 function getTargetForMode(sides) {
-  return TARGETS[sides] * (state.properTurtleMode ? 2 : 1);
+  const base = getBaseTarget(sides);
+  if (state.negativeHalfwayMode) return -Math.ceil(base / 2);
+  if (state.subtractionMode) return 0;
+  return base;
 }
 
 function getRollCount() {
@@ -88,6 +393,10 @@ function getCurrentRollTotal() {
 }
 
 function setMessage(text, type = "") {
+  if (!messageBox) {
+    return;
+  }
+
   messageBox.textContent = text;
   messageBox.className = "message";
 
@@ -117,6 +426,10 @@ function ensureAudioContext() {
 }
 
 function updateVolumeDisplay() {
+  if (!volumeSlider || !volumeValue) {
+    return;
+  }
+
   const percent = Math.round(state.volume * 100);
   volumeSlider.value = String(percent);
   volumeValue.textContent = `${percent}%`;
@@ -168,9 +481,25 @@ function clearPendingTimers() {
 }
 
 function updateDisplay() {
+  if (!currentTotalEl || !rolledNumberEl || !modeLabel || !rollStatusLabel || !rolledDieEl) {
+    return;
+  }
+
   const rollTotal = state.currentRolls.length > 0 ? getCurrentRollTotal() : null;
-  const totalLabel = `${state.total}/${state.target}`;
-  currentTotalEl.textContent = totalLabel;
+  const totalLabel = isSubtractingMode()
+    ? `${state.total}/${state.target}`
+    : `${state.total}/${state.target}`;
+  const displayTotal = state.ghostMode ? "??" : totalLabel;
+  currentTotalEl.textContent = displayTotal;
+
+  if (currentTotalLabelEl) {
+    currentTotalLabelEl.textContent = state.subtractionMode
+      ? "Remaining"
+      : state.negativeHalfwayMode
+        ? "Progress"
+        : "Current Total";
+  }
+
   rolledNumberEl.textContent = state.properTurtleMode ? "-" : rollTotal ?? "-";
   modeLabel.textContent = state.modeSides
     ? state.properTurtleMode
@@ -189,7 +518,7 @@ function updateDisplay() {
         ? `D${state.modeSides} proper turtle roll total: ${rollTotal}`
         : `D${state.modeSides} roll: ${rollTotal}`,
   );
-  properCurrentTotalEl.textContent = totalLabel;
+  properCurrentTotalEl.textContent = state.ghostMode ? "??" : totalLabel;
   properRollEls.forEach((el, index) => {
     el.textContent = state.currentRolls[index] ?? "-";
   });
@@ -199,6 +528,10 @@ function updateDisplay() {
 }
 
 function resetRoundPrompt() {
+  if (!promptText || !helperText || !properRollGrid) {
+    return;
+  }
+
   promptText.textContent = "Press start to begin.";
   helperText.textContent = state.properTurtleMode
     ? "Proper Turtle Mode rolls three dice at once."
@@ -212,6 +545,10 @@ function getTargetLabel() {
 }
 
 function setInputEnabled(enabled) {
+  if (!answerInput || !submitButton) {
+    return;
+  }
+
   answerInput.disabled = !enabled;
   submitButton.disabled = !enabled;
   keypadButtons.forEach((button) => {
@@ -219,18 +556,32 @@ function setInputEnabled(enabled) {
   });
 
   if (enabled) {
-    answerInput.focus();
+    if (keypadWrap.classList.contains("hidden")) {
+      answerInput.focus();
+    } else {
+      answerInput.blur();
+    }
   } else {
     answerInput.value = "";
   }
 }
 
 function toggleKeypadVisibility() {
+  if (!keypadWrap || !mobileKeypadButton || !answerInput) {
+    return;
+  }
+
   const willShow = keypadWrap.classList.contains("hidden");
   keypadWrap.classList.toggle("hidden", !willShow);
   mobileKeypadButton.textContent = willShow
     ? "Hide on-page num pad"
     : "Click if you are on mobile";
+
+  if (willShow) {
+    answerInput.blur();
+  } else if (!answerInput.disabled) {
+    answerInput.focus();
+  }
 }
 
 async function toggleFullscreen() {
@@ -271,21 +622,31 @@ async function toggleFullscreen() {
 
 function applyProperModeTheme() {
   document.body.classList.toggle("proper-turtle-mode", state.properTurtleMode);
-  properModeToggle.setAttribute("aria-pressed", String(state.properTurtleMode));
-  properModeToggle.classList.toggle("active", state.properTurtleMode);
-  properModeToggle.textContent = state.properTurtleMode
-    ? "Proper Turtle Mode ✓"
-    : "Proper Turtle Mode";
   const turtleSrc = state.properTurtleMode ? "turtle_turtle.png" : "turtle.png";
-  modeTurtleArt.src = turtleSrc;
-  gameTurtleArt.src = turtleSrc;
+
+  if (properModeToggle) {
+    properModeToggle.setAttribute("aria-pressed", String(state.properTurtleMode));
+    properModeToggle.classList.toggle("active", state.properTurtleMode);
+    properModeToggle.textContent = state.properTurtleMode
+      ? "Proper Turtle Mode ✓"
+      : "Proper Turtle Mode";
+  }
+
+  if (modeTurtleArt) {
+    modeTurtleArt.src = turtleSrc;
+  }
+
+  if (gameTurtleArt) {
+    gameTurtleArt.src = turtleSrc;
+  }
 }
 
 function startMode(sides) {
   clearPendingTimers();
   state.modeSides = sides;
   state.target = getTargetForMode(sides);
-  state.total = 0;
+  state.startTotal = state.subtractionMode ? getBaseTarget(sides) : 0;
+  state.total = state.startTotal;
   state.currentRolls = [];
   state.waitingForAnswer = false;
   state.finished = false;
@@ -295,13 +656,25 @@ function startMode(sides) {
 
   updateDisplay();
   resetRoundPrompt();
-  answerInput.max = String(state.target);
+  answerInput.min = isSubtractingMode() ? "-9999" : "0";
+  answerInput.max = "9999";
   setInputEnabled(false);
-  setMessage(
-    state.properTurtleMode
-      ? `Proper Turtle Mode set to D${sides}. Reach ${state.target} with triple rolls.`
-      : `Mode set to D${sides}. Reach ${state.target}.`,
-  );
+
+  let modeMsg;
+  if (state.subtractionMode && state.properTurtleMode) {
+    modeMsg = `Proper Turtle Subtraction. Count down from ${state.startTotal} to 0 with triple rolls.`;
+  } else if (state.subtractionMode) {
+    modeMsg = `Subtraction Mode set to D${sides}. Count down from ${state.startTotal} to 0.`;
+  } else if (state.negativeHalfwayMode && state.properTurtleMode) {
+    modeMsg = `Proper Turtle Neg. Half Way. Subtract from 0 to reach ${state.target} with triple rolls.`;
+  } else if (state.negativeHalfwayMode) {
+    modeMsg = `Neg. Half Way set to D${sides}. Subtract from 0 to reach ${state.target}.`;
+  } else if (state.properTurtleMode) {
+    modeMsg = `Proper Turtle Mode set to D${sides}. Reach ${state.target} with triple rolls.`;
+  } else {
+    modeMsg = `Mode set to D${sides}. Reach ${state.target}.`;
+  }
+  setMessage(modeMsg);
   startButton.disabled = false;
   startButton.textContent = "Start Game";
   setRolling(false);
@@ -313,14 +686,22 @@ function startMode(sides) {
 
 function leaveGame() {
   clearPendingTimers();
-  modeScreen.classList.remove("hidden");
-  gameScreen.classList.add("hidden");
-  answerInput.value = "";
+  if (modeScreen && gameScreen) {
+    modeScreen.classList.remove("hidden");
+    gameScreen.classList.add("hidden");
+  }
+  if (answerInput) {
+    answerInput.value = "";
+  }
   setRolling(false);
   hideScoreboard();
 }
 
 function setRolling(active) {
+  if (!statusCards[2] || !rolledDieEl) {
+    return;
+  }
+
   statusCards[2].classList.toggle("rolling", active);
 
   if (!active) {
@@ -358,7 +739,9 @@ function autoRoll() {
   updateDisplay();
   setRolling(true);
   if (!state.properTurtleMode) {
-    promptText.textContent = `${state.total} + ${getCurrentRollTotal()} = ?`;
+    const op = isSubtractingMode() ? "−" : "+";
+    const currentDisplay = state.ghostMode ? "??" : state.total;
+    promptText.textContent = `${currentDisplay} ${op} ${getCurrentRollTotal()} = ?`;
   }
   helperText.textContent = state.properTurtleMode
     ? `Current total and all three rolls are shown below. Reach exactly ${getTargetLabel()}.`
@@ -375,13 +758,17 @@ function finishGame() {
   updateDisplay();
   rainWinConfetti();
 
-  promptText.textContent = `You reached ${state.target}.`;
+  promptText.textContent = isSubtractingMode()
+    ? `You reached ${state.target}.`
+    : `You reached ${state.total}.`;
   promptText.classList.remove("hidden");
   properRollGrid.classList.add("hidden");
   helperText.textContent = "The game is over. Choose another mode to play again.";
   setInputEnabled(false);
   setMessage("You win.", "success");
-  openScoreboard("Target reached");
+  const totalTimeMs = (state.lastStepAt ?? performance.now()) - (state.startedAt ?? performance.now());
+  persistPassedRun(totalTimeMs);
+  openScoreboard("Target reached", { mode: "run", totalTimeMs });
 }
 
 function endGameTooHigh() {
@@ -391,13 +778,19 @@ function endGameTooHigh() {
   setRolling(false);
   updateDisplay();
 
-  promptText.textContent = `You went past ${state.target}.`;
+  if (isSubtractingMode()) {
+    promptText.textContent = `You went past ${state.target}.`;
+    setMessage(`Too low. Your total went to ${state.total}.`, "error");
+  } else {
+    promptText.textContent = `You went past ${state.target}.`;
+    setMessage(`Too high. Your total reached ${state.total}.`, "error");
+  }
   promptText.classList.remove("hidden");
   properRollGrid.classList.add("hidden");
   helperText.textContent = "That run is over. Choose another mode to try again.";
   setInputEnabled(false);
-  setMessage(`Too high. Your total reached ${state.total}.`, "error");
-  openScoreboard("Run ended");
+  const totalTimeMs = (state.lastStepAt ?? performance.now()) - (state.startedAt ?? performance.now());
+  openScoreboard("Run ended", { mode: "run", totalTimeMs });
 }
 
 function formatSeconds(ms) {
@@ -407,11 +800,27 @@ function formatSeconds(ms) {
 function recordStep(total) {
   const now = performance.now();
   const stepMs = now - state.lastStepAt;
+  const elapsedMs = now - state.startedAt;
+  const fromTotal = state.total;
+  const growth = total - fromTotal;
   state.lastStepAt = now;
-  state.history.push({ total, stepMs });
+  state.history.push({
+    fromTotal,
+    toTotal: total,
+    growth,
+    stepMs,
+    elapsedMs,
+    rangeBucketIndex: getRangeBucketIndex(fromTotal),
+    timeBucketIndex: getTimeBucketIndex(elapsedMs),
+    endDigitPair: `${fromTotal % 10}+${growth % 10}`,
+  });
 }
 
 function flashSuccess() {
+  if (!answerForm) {
+    return;
+  }
+
   answerForm.classList.remove("success-flash");
   void answerForm.offsetWidth;
   answerForm.classList.add("success-flash");
@@ -460,29 +869,103 @@ function rainWinConfetti() {
 }
 
 function hideScoreboard() {
+  if (!scoreModal) {
+    return;
+  }
+
   scoreModal.classList.add("hidden");
   scoreModal.setAttribute("aria-hidden", "true");
 }
 
-function openScoreboard(title) {
-  const totalTimeMs = (state.lastStepAt ?? performance.now()) - (state.startedAt ?? performance.now());
-  const averageSpeed = state.total > 0 ? state.total / (totalTimeMs / 1000) : 0;
+function openScoreboard(title, { mode = "run", totalTimeMs = 0 } = {}) {
+  if (
+    !modalTitle ||
+    !scoreTargetLabel ||
+    !scoreTarget ||
+    !scoreTimeLabel ||
+    !scoreTime ||
+    !scoreCalcSpeed ||
+    !scoreGrowthSpeed ||
+    !scorePassRuns ||
+    !graphCaption ||
+    !speedChart
+  ) {
+    return;
+  }
 
+  const aggregated = aggregatePersistedStats();
+  const calcSpeed =
+    mode === "run" ? getCalcSpeed(state.history.length, totalTimeMs) : aggregated.calcSpeed;
+  const growthSpeed =
+    mode === "run" ? getGrowthSpeed(state.total, totalTimeMs) : aggregated.growthSpeed;
+
+  state.scoreboardMode = mode;
   modalTitle.textContent = title;
-  scoreTarget.textContent = `${state.total} / ${state.target}`;
-  scoreTime.textContent = formatSeconds(totalTimeMs);
-  scoreSpeed.textContent = `${averageSpeed.toFixed(2)} nums/s`;
-  graphCaption.textContent = "Line graph shows the seconds spent on each successful jump in total.";
-  drawChart();
-  scoreModal.classList.remove("hidden");
-  scoreModal.setAttribute("aria-hidden", "false");
+  scoreTargetLabel.textContent = mode === "run" ? "Target" : "Saved Runs";
+  scoreTimeLabel.textContent = mode === "run" ? "Total Time" : "Saved Time";
+  scoreTarget.textContent =
+    mode === "run" ? `${state.total} / ${state.target}` : `${aggregated.runCount} pass runs`;
+  scoreTime.textContent =
+    mode === "run" ? formatSeconds(totalTimeMs) : formatSeconds(aggregated.totalTimeMs);
+  scoreCalcSpeed.textContent = `${formatDecimal(calcSpeed)} calcs/s`;
+  scoreGrowthSpeed.textContent = `${formatDecimal(growthSpeed)} nums/s`;
+  scorePassRuns.textContent = String(aggregated.runCount);
+  graphCaption.textContent =
+    mode === "run"
+      ? "Line graph shows seconds spent on each correct answer in this run."
+      : "Line graph shows the average total reached during each saved time window.";
+  updateInsightCard(
+    weakestRangeEl,
+    weakestRangeDetailEl,
+    aggregated.ranges[0],
+    "Finish a pass run to build range stats.",
+  );
+  updateInsightCard(
+    weakestTimeWindowEl,
+    weakestTimeWindowDetailEl,
+    aggregated.timeWindows[0],
+    "Finish a pass run to build time stats.",
+  );
+  updateInsightCard(
+    weakestDigitPairEl,
+    weakestDigitPairDetailEl,
+    aggregated.digitPairs[0],
+    "Finish a pass run to build digit-pair stats.",
+  );
+  renderStatsRows(rangeStatsTable, aggregated.ranges.slice(0, 8), "No saved range stats yet.");
+  renderStatsRows(timeStatsTable, aggregated.timeWindows.slice(0, 8), "No saved time-window stats yet.");
+  renderStatsRows(digitStatsTable, aggregated.digitPairs.slice(0, 10), "No saved end-digit stats yet.");
+  renderSavedRuns();
+  drawChart(mode, aggregated);
+  if (closeScoreButton) {
+    closeScoreButton.classList.toggle("hidden", mode === "run");
+  }
+  if (playAgainButton) {
+    playAgainButton.classList.toggle("hidden", mode !== "run");
+  }
+  if (changeModeButton) {
+    changeModeButton.classList.toggle("hidden", mode !== "run");
+  }
+  if (scoreModal) {
+    scoreModal.classList.remove("hidden");
+    scoreModal.setAttribute("aria-hidden", "false");
+  }
 }
 
-function drawChart() {
+function drawChart(mode, aggregated) {
   const ctx = speedChart.getContext("2d");
   const { width, height } = speedChart;
   const pad = { top: 20, right: 20, bottom: 36, left: 46 };
-  const points = state.history;
+  const points =
+    mode === "run"
+      ? state.history.map((point) => ({
+          xValue: point.toTotal,
+          yValue: point.stepMs,
+        }))
+      : aggregated.growthTimeline.map((point, index) => ({
+          xValue: index + 1,
+          yValue: point.averageReached,
+        }));
 
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = "#0d1720";
@@ -499,23 +982,26 @@ function drawChart() {
   if (points.length === 0) {
     ctx.fillStyle = "#95aab3";
     ctx.font = "16px Roboto";
-    ctx.fillText("No successful steps recorded.", pad.left + 10, height / 2);
+    ctx.fillText("No saved stats recorded yet.", pad.left + 10, height / 2);
     return;
   }
 
-  const maxTotal = Math.max(...points.map((point) => point.total), state.target);
-  const maxStep = Math.max(...points.map((point) => point.stepMs), 1000);
+  const maxX =
+    mode === "run"
+      ? Math.max(...points.map((point) => point.xValue), state.target)
+      : Math.max(points.length, 1);
+  const maxY =
+    mode === "run"
+      ? Math.max(...points.map((point) => point.yValue), 1000)
+      : Math.max(...points.map((point) => point.yValue), 10);
 
   ctx.strokeStyle = "#2fcf8f";
   ctx.lineWidth = 3;
   ctx.beginPath();
 
   points.forEach((point, index) => {
-    const x = pad.left + (point.total / maxTotal) * (width - pad.left - pad.right);
-    const y =
-      height -
-      pad.bottom -
-      (point.stepMs / maxStep) * (height - pad.top - pad.bottom);
+    const x = pad.left + (point.xValue / maxX) * (width - pad.left - pad.right);
+    const y = height - pad.bottom - (point.yValue / maxY) * (height - pad.top - pad.bottom);
 
     if (index === 0) {
       ctx.moveTo(x, y);
@@ -528,11 +1014,8 @@ function drawChart() {
 
   ctx.fillStyle = "#63f4b0";
   points.forEach((point) => {
-    const x = pad.left + (point.total / maxTotal) * (width - pad.left - pad.right);
-    const y =
-      height -
-      pad.bottom -
-      (point.stepMs / maxStep) * (height - pad.top - pad.bottom);
+    const x = pad.left + (point.xValue / maxX) * (width - pad.left - pad.right);
+    const y = height - pad.bottom - (point.yValue / maxY) * (height - pad.top - pad.bottom);
     ctx.beginPath();
     ctx.arc(x, y, 4, 0, Math.PI * 2);
     ctx.fill();
@@ -540,15 +1023,15 @@ function drawChart() {
 
   ctx.fillStyle = "#95aab3";
   ctx.font = "14px Roboto";
-  ctx.fillText("Total", width / 2 - 10, height - 10);
+  ctx.fillText(mode === "run" ? "Total reached" : "Saved time window", width / 2 - 28, height - 10);
   ctx.save();
   ctx.translate(16, height / 2 + 20);
   ctx.rotate(-Math.PI / 2);
-  ctx.fillText("Seconds for step", 0, 0);
+  ctx.fillText(mode === "run" ? "Seconds for answer" : "Average total reached", 0, 0);
   ctx.restore();
   ctx.fillText(`0`, pad.left - 8, height - pad.bottom + 18);
-  ctx.fillText(`${maxTotal}`, width - pad.right - 12, height - pad.bottom + 18);
-  ctx.fillText(`${(maxStep / 1000).toFixed(1)}s`, 4, pad.top + 6);
+  ctx.fillText(`${maxX}`, width - pad.right - 12, height - pad.bottom + 18);
+  ctx.fillText(mode === "run" ? `${(maxY / 1000).toFixed(1)}s` : `${Math.round(maxY)}`, 4, pad.top + 6);
 }
 
 function handleAnswer(event) {
@@ -562,21 +1045,33 @@ function maybeAcceptAnswer() {
 
   const guessedTotal = Number.parseInt(answerInput.value, 10);
   const rollTotal = getCurrentRollTotal();
-  const correctTotal = state.total + rollTotal;
+  const correctTotal = isSubtractingMode()
+    ? state.total - rollTotal
+    : state.total + rollTotal;
 
   if (Number.isNaN(guessedTotal)) {
     setMessage("Type the new total. It will accept automatically when correct.");
     return;
   }
 
-  if (guessedTotal < correctTotal) {
-    setMessage("Keep going.", "");
-    return;
-  }
-
-  if (guessedTotal > correctTotal) {
-    setMessage(`Too high. ${state.total} + ${rollTotal} is smaller than ${guessedTotal}.`, "error");
-    return;
+  if (isSubtractingMode()) {
+    if (guessedTotal > correctTotal) {
+      setMessage("Keep going.", "");
+      return;
+    }
+    if (guessedTotal < correctTotal) {
+      setMessage("Too low.", "error");
+      return;
+    }
+  } else {
+    if (guessedTotal < correctTotal) {
+      setMessage("Keep going.", "");
+      return;
+    }
+    if (guessedTotal > correctTotal) {
+      setMessage("Too high.", "error");
+      return;
+    }
   }
 
   recordStep(correctTotal);
@@ -591,25 +1086,32 @@ function maybeAcceptAnswer() {
   answerInput.value = "";
   setInputEnabled(false);
 
-  if (state.total === state.target) {
-    finishGame();
-    return;
-  }
-
-  if (state.total > state.target) {
-    endGameTooHigh();
-    return;
+  if (isSubtractingMode()) {
+    if (state.total === state.target) {
+      finishGame();
+      return;
+    }
+    if (state.total < state.target) {
+      endGameTooHigh();
+      return;
+    }
+  } else {
+    if (state.total >= state.target) {
+      finishGame();
+      return;
+    }
   }
 
   autoRoll();
 }
 
 function handleKeypadPress(button) {
-  if (answerInput.disabled) {
+  if (!answerInput || answerInput.disabled) {
     return;
   }
 
   ensureAudioContext();
+  answerInput.blur();
 
   const action = button.dataset.keypadAction;
   const value = button.dataset.keypadValue;
@@ -617,62 +1119,157 @@ function handleKeypadPress(button) {
 
   if (action === "clear") {
     nextValue = "";
-  } else if (action === "backspace") {
-    nextValue = nextValue.slice(0, -1);
+  } else if (action === "negate") {
+    if (nextValue.startsWith("-")) {
+      nextValue = nextValue.slice(1);
+    } else {
+      nextValue = `-${nextValue}`;
+    }
   } else if (value) {
     nextValue = `${nextValue}${value}`;
   }
 
-  const maxLength = String(state.target).length + 1;
+  const maxLength = String(Math.abs(state.target)).length + 2;
   answerInput.value = nextValue.slice(0, maxLength);
   maybeAcceptAnswer();
 }
 
-modeButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    startMode(Number.parseInt(button.dataset.sides, 10));
+if (!isStatsPage) {
+  modeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      startMode(Number.parseInt(button.dataset.sides, 10));
+    });
   });
-});
 
-properModeToggle.addEventListener("click", () => {
-  ensureAudioContext();
-  state.properTurtleMode = !state.properTurtleMode;
-  applyProperModeTheme();
-  resetRoundPrompt();
-  setMessage(
-    state.properTurtleMode
-      ? "Proper Turtle Mode is on. Buttons turn red and each turn rolls three dice."
-      : "Proper Turtle Mode is off. Standard single-roll rules are active.",
-  );
-});
-
-startButton.addEventListener("click", beginRun);
-restartButton.addEventListener("click", leaveGame);
-answerForm.addEventListener("submit", handleAnswer);
-answerForm.addEventListener("focusin", ensureAudioContext);
-answerInput.addEventListener("input", maybeAcceptAnswer);
-volumeSlider.addEventListener("input", () => {
-  state.volume = Number.parseInt(volumeSlider.value, 10) / 100;
-  updateVolumeDisplay();
-  ensureAudioContext();
-});
-mobileKeypadButton.addEventListener("click", toggleKeypadVisibility);
-fullscreenButton.addEventListener("click", toggleFullscreen);
-keypadWrap.addEventListener("click", (event) => {
-  const button = event.target.closest(".keypad-button");
-
-  if (!button) {
-    return;
+  if (properModeToggle) {
+    properModeToggle.addEventListener("click", () => {
+      ensureAudioContext();
+      state.properTurtleMode = !state.properTurtleMode;
+      applyProperModeTheme();
+      resetRoundPrompt();
+      setMessage(
+        state.properTurtleMode
+          ? "Proper Turtle Mode is on. Buttons turn red and each turn rolls three dice."
+          : "Proper Turtle Mode is off. Standard single-roll rules are active.",
+      );
+    });
   }
 
-  handleKeypadPress(button);
-});
-playAgainButton.addEventListener("click", () => {
-  hideScoreboard();
-  startMode(state.modeSides);
-});
-changeModeButton.addEventListener("click", leaveGame);
+  if (startButton) {
+    startButton.addEventListener("click", beginRun);
+  }
+  if (restartButton) {
+    restartButton.addEventListener("click", leaveGame);
+  }
+  if (answerForm) {
+    answerForm.addEventListener("submit", handleAnswer);
+    answerForm.addEventListener("focusin", ensureAudioContext);
+  }
+  if (answerInput) {
+    answerInput.addEventListener("input", maybeAcceptAnswer);
+  }
+  if (volumeSlider) {
+    volumeSlider.addEventListener("input", () => {
+      state.volume = Number.parseInt(volumeSlider.value, 10) / 100;
+      updateVolumeDisplay();
+      ensureAudioContext();
+    });
+  }
+  if (mobileKeypadButton) {
+    mobileKeypadButton.addEventListener("click", toggleKeypadVisibility);
+  }
+  if (fullscreenButton) {
+    fullscreenButton.addEventListener("click", toggleFullscreen);
+  }
+  if (ghostModeToggle) {
+    ghostModeToggle.addEventListener("click", () => {
+      ensureAudioContext();
+      state.ghostMode = !state.ghostMode;
+      ghostModeToggle.setAttribute("aria-pressed", String(state.ghostMode));
+      ghostModeToggle.classList.toggle("active", state.ghostMode);
+      ghostModeToggle.textContent = state.ghostMode ? "Ghost Mode ✓" : "Ghost Mode";
+      setMessage(
+        state.ghostMode
+          ? "Ghost Mode on. The running total is hidden during play."
+          : "Ghost Mode off.",
+      );
+    });
+  }
+  if (subtractionModeToggle) {
+    subtractionModeToggle.addEventListener("click", () => {
+      ensureAudioContext();
+      state.subtractionMode = !state.subtractionMode;
+      if (state.subtractionMode) {
+        state.negativeHalfwayMode = false;
+        if (negativeHalfwayToggle) {
+          negativeHalfwayToggle.setAttribute("aria-pressed", "false");
+          negativeHalfwayToggle.classList.remove("active");
+          negativeHalfwayToggle.textContent = "Neg. Half Way";
+        }
+      }
+      subtractionModeToggle.setAttribute("aria-pressed", String(state.subtractionMode));
+      subtractionModeToggle.classList.toggle("active", state.subtractionMode);
+      subtractionModeToggle.textContent = state.subtractionMode
+        ? "Subtraction ✓"
+        : "Subtraction";
+      setMessage(
+        state.subtractionMode
+          ? "Subtraction on. Count down from the target to zero."
+          : "Subtraction off.",
+      );
+    });
+  }
+  if (negativeHalfwayToggle) {
+    negativeHalfwayToggle.addEventListener("click", () => {
+      ensureAudioContext();
+      state.negativeHalfwayMode = !state.negativeHalfwayMode;
+      if (state.negativeHalfwayMode) {
+        state.subtractionMode = false;
+        if (subtractionModeToggle) {
+          subtractionModeToggle.setAttribute("aria-pressed", "false");
+          subtractionModeToggle.classList.remove("active");
+          subtractionModeToggle.textContent = "Subtraction";
+        }
+      }
+      negativeHalfwayToggle.setAttribute("aria-pressed", String(state.negativeHalfwayMode));
+      negativeHalfwayToggle.classList.toggle("active", state.negativeHalfwayMode);
+      negativeHalfwayToggle.textContent = state.negativeHalfwayMode
+        ? "Neg. Half Way ✓"
+        : "Neg. Half Way";
+      setMessage(
+        state.negativeHalfwayMode
+          ? "Neg. Half Way on. Subtract from 0 to reach the negative half-target."
+          : "Neg. Half Way off.",
+      );
+    });
+  }
+  if (closeScoreButton) {
+    closeScoreButton.addEventListener("click", hideScoreboard);
+  }
+  if (keypadWrap) {
+    keypadWrap.addEventListener("click", (event) => {
+      const button = event.target.closest(".keypad-button");
 
-applyProperModeTheme();
-updateVolumeDisplay();
-updateDisplay();
+      if (!button) {
+        return;
+      }
+
+      handleKeypadPress(button);
+    });
+  }
+  if (playAgainButton) {
+    playAgainButton.addEventListener("click", () => {
+      hideScoreboard();
+      startMode(state.modeSides);
+    });
+  }
+  if (changeModeButton) {
+    changeModeButton.addEventListener("click", leaveGame);
+  }
+
+  applyProperModeTheme();
+  updateVolumeDisplay();
+  updateDisplay();
+} else {
+  openScoreboard("Saved stats", { mode: "stats" });
+}
