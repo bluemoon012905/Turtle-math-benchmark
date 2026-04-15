@@ -38,9 +38,9 @@ body::before {
   background-repeat: repeat;
   background-size: 220px auto;
   background-position: 0 0;
-  transform: translate3d(0, 0, 0) rotate(-18deg) scale(1.1);
+  transform: rotate(-18deg) scale(1.1);
   transition: opacity 220ms ease;
-  will-change: transform;
+  will-change: background-position;
   z-index: 0;
 }
 
@@ -770,6 +770,7 @@ body.proper-turtle-mode::before {
   animation: turtle-scan 14s linear infinite;
 }
 
+
 body.proper-turtle-mode .secondary-button {
   color: var(--button-text);
   background: linear-gradient(135deg, rgba(255, 102, 102, 0.9) 0%, rgba(182, 31, 52, 0.9) 100%);
@@ -778,11 +779,11 @@ body.proper-turtle-mode .secondary-button {
 
 @keyframes turtle-scan {
   0% {
-    transform: translate3d(0, 0, 0) rotate(-18deg) scale(1.1);
+    background-position: 0 0;
   }
 
   100% {
-    transform: translate3d(220px, 0, 0) rotate(-18deg) scale(1.1);
+    background-position: 220px 0;
   }
 }
 
