@@ -6,6 +6,8 @@ const modeTurtleArt = document.getElementById("mode-turtle-art");
 const gameTurtleArt = document.getElementById("game-turtle-art");
 const modeLabel = document.getElementById("mode-label");
 const currentTotalEl = document.getElementById("current-total");
+const turtleConfettiLayer = document.getElementById("turtle-confetti-layer");
+const winConfettiLayer = document.getElementById("win-confetti-layer");
 const rollStatusLabel = document.getElementById("roll-status-label");
 const rolledNumberEl = document.getElementById("rolled-number");
 const rolledDieEl = document.getElementById("rolled-die");
@@ -24,6 +26,8 @@ const restartButton = document.getElementById("restart-button");
 const answerForm = document.getElementById("answer-form");
 const answerInput = document.getElementById("answer-input");
 const submitButton = document.getElementById("submit-button");
+const volumeSlider = document.getElementById("volume-slider");
+const volumeValue = document.getElementById("volume-value");
 const scoreModal = document.getElementById("score-modal");
 const modalTitle = document.getElementById("modal-title");
 const scoreTarget = document.getElementById("score-target");
@@ -45,6 +49,7 @@ const TARGETS = {
 const state = {
   modeSides: null,
   properTurtleMode: false,
+  volume: 0.45,
   target: 50,
   total: 0,
   currentRolls: [],
@@ -56,6 +61,9 @@ const state = {
   rollTimerId: null,
   nextRollTimerId: null,
 };
+
+let audioContext = null;
+let masterGainNode = null;
 
 function getTargetForMode(sides) {
   return TARGETS[sides] * (state.properTurtleMode ? 2 : 1);
@@ -76,6 +84,65 @@ function setMessage(text, type = "") {
   if (type) {
     messageBox.classList.add(type);
   }
+}
+
+function ensureAudioContext() {
+  if (!window.AudioContext && !window.webkitAudioContext) {
+    return null;
+  }
+
+  if (!audioContext) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    audioContext = new AudioContextClass();
+    masterGainNode = audioContext.createGain();
+    masterGainNode.gain.value = state.volume;
+    masterGainNode.connect(audioContext.destination);
+  }
+
+  if (audioContext.state === "suspended") {
+    audioContext.resume().catch(() => {});
+  }
+
+  return audioContext;
+}
+
+function updateVolumeDisplay() {
+  const percent = Math.round(state.volume * 100);
+  volumeSlider.value = String(percent);
+  volumeValue.textContent = `${percent}%`;
+
+  if (masterGainNode) {
+    masterGainNode.gain.value = state.volume;
+  }
+}
+
+function playCorrectChime() {
+  const ctx = ensureAudioContext();
+
+  if (!ctx || !masterGainNode) {
+    return;
+  }
+
+  const now = ctx.currentTime;
+  const notes = [784, 1046.5];
+
+  notes.forEach((frequency, index) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const start = now + index * 0.08;
+    const end = start + 0.18;
+
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(frequency, start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.22, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, end);
+
+    osc.connect(gain);
+    gain.connect(masterGainNode);
+    osc.start(start);
+    osc.stop(end);
+  });
 }
 
 function clearPendingTimers() {
@@ -243,6 +310,7 @@ function finishGame() {
   state.currentRolls = [];
   setRolling(false);
   updateDisplay();
+  rainWinConfetti();
 
   promptText.textContent = `You reached ${state.target}.`;
   promptText.classList.remove("hidden");
@@ -284,6 +352,48 @@ function flashSuccess() {
   answerForm.classList.remove("success-flash");
   void answerForm.offsetWidth;
   answerForm.classList.add("success-flash");
+}
+
+function spawnConfetti(layer, count, { spread = 1, durationBase = 900, drift = 120 } = {}) {
+  if (!layer) {
+    return;
+  }
+
+  const colors = ["#ff6b6b", "#ffd166", "#63f4b0", "#56cfe1", "#f8f9fa"];
+
+  for (let index = 0; index < count; index += 1) {
+    const piece = document.createElement("span");
+    piece.className = "confetti-piece";
+    piece.style.left = `${50 + (Math.random() - 0.5) * 100 * spread}%`;
+    piece.style.top = `${Math.random() * 14}%`;
+    piece.style.setProperty("--confetti-color", colors[index % colors.length]);
+    piece.style.setProperty("--confetti-x", `${(Math.random() - 0.5) * drift}px`);
+    piece.style.setProperty("--confetti-rotate", `${(Math.random() - 0.5) * 1080}deg`);
+    piece.style.setProperty("--confetti-duration", `${durationBase + Math.random() * 500}ms`);
+    piece.style.setProperty("--confetti-delay", `${Math.random() * 120}ms`);
+    layer.appendChild(piece);
+    window.setTimeout(() => piece.remove(), durationBase + 1000);
+  }
+}
+
+function burstTurtleConfetti() {
+  spawnConfetti(turtleConfettiLayer, 26, {
+    spread: 0.7,
+    durationBase: 820,
+    drift: 110,
+  });
+}
+
+function rainWinConfetti() {
+  winConfettiLayer.classList.add("active");
+  spawnConfetti(winConfettiLayer, 180, {
+    spread: 1.9,
+    durationBase: 1900,
+    drift: 220,
+  });
+  window.setTimeout(() => {
+    winConfettiLayer.classList.remove("active");
+  }, 3200);
 }
 
 function hideScoreboard() {
@@ -413,6 +523,8 @@ function maybeAcceptAnswer() {
   setRolling(false);
   updateDisplay();
   flashSuccess();
+  burstTurtleConfetti();
+  playCorrectChime();
   answerInput.value = "";
   setInputEnabled(false);
 
@@ -436,6 +548,7 @@ modeButtons.forEach((button) => {
 });
 
 properModeToggle.addEventListener("click", () => {
+  ensureAudioContext();
   state.properTurtleMode = !state.properTurtleMode;
   applyProperModeTheme();
   resetRoundPrompt();
@@ -449,7 +562,13 @@ properModeToggle.addEventListener("click", () => {
 startButton.addEventListener("click", beginRun);
 restartButton.addEventListener("click", leaveGame);
 answerForm.addEventListener("submit", handleAnswer);
+answerForm.addEventListener("focusin", ensureAudioContext);
 answerInput.addEventListener("input", maybeAcceptAnswer);
+volumeSlider.addEventListener("input", () => {
+  state.volume = Number.parseInt(volumeSlider.value, 10) / 100;
+  updateVolumeDisplay();
+  ensureAudioContext();
+});
 playAgainButton.addEventListener("click", () => {
   hideScoreboard();
   startMode(state.modeSides);
@@ -457,4 +576,5 @@ playAgainButton.addEventListener("click", () => {
 changeModeButton.addEventListener("click", leaveGame);
 
 applyProperModeTheme();
+updateVolumeDisplay();
 updateDisplay();
