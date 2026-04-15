@@ -51,8 +51,10 @@ const scoreTimeLabel = document.getElementById("score-time-label");
 const scoreTime = document.getElementById("score-time");
 const scoreCalcSpeed = document.getElementById("score-calc-speed");
 const scoreGrowthSpeed = document.getElementById("score-growth-speed");
+const scorePassRunsLabel = document.getElementById("score-pass-runs-label");
 const scorePassRuns = document.getElementById("score-pass-runs");
 const graphCaption = document.getElementById("graph-caption");
+const scoreRunTable = document.getElementById("score-run-table");
 const openStatsButton = document.getElementById("open-stats-button");
 const weakestRangeEl = document.getElementById("weakest-range");
 const weakestRangeDetailEl = document.getElementById("weakest-range-detail");
@@ -295,6 +297,10 @@ function escapeHtml(text) {
 }
 
 function renderStatsRows(container, rows, emptyText) {
+  if (!container) {
+    return;
+  }
+
   if (rows.length === 0) {
     container.innerHTML = `<p class="stats-empty">${escapeHtml(emptyText)}</p>`;
     return;
@@ -315,6 +321,10 @@ function renderStatsRows(container, rows, emptyText) {
 }
 
 function renderSavedRuns() {
+  if (!savedRunsTable) {
+    return;
+  }
+
   if (persistedStats.runs.length === 0) {
     savedRunsTable.innerHTML =
       '<p class="stats-empty">No pass runs saved on this device yet.</p>';
@@ -343,6 +353,10 @@ function renderSavedRuns() {
 }
 
 function updateInsightCard(titleEl, detailEl, summary, fallback) {
+  if (!titleEl || !detailEl) {
+    return;
+  }
+
   if (!summary) {
     titleEl.textContent = "No saved data";
     detailEl.textContent = fallback;
@@ -627,9 +641,7 @@ function applyProperModeTheme() {
   if (properModeToggle) {
     properModeToggle.setAttribute("aria-pressed", String(state.properTurtleMode));
     properModeToggle.classList.toggle("active", state.properTurtleMode);
-    properModeToggle.textContent = state.properTurtleMode
-      ? "Proper Turtle Mode ✓"
-      : "Proper Turtle Mode";
+    properModeToggle.textContent = "Proper Turtle Mode";
   }
 
   if (modeTurtleArt) {
@@ -666,9 +678,9 @@ function startMode(sides) {
   } else if (state.subtractionMode) {
     modeMsg = `Subtraction Mode set to D${sides}. Count down from ${state.startTotal} to 0.`;
   } else if (state.negativeHalfwayMode && state.properTurtleMode) {
-    modeMsg = `Proper Turtle Neg. Half Way. Subtract from 0 to reach ${state.target} with triple rolls.`;
+    modeMsg = `Proper Turtle Subtraction Half Way. Subtract from 0 to reach ${state.target} with triple rolls.`;
   } else if (state.negativeHalfwayMode) {
-    modeMsg = `Neg. Half Way set to D${sides}. Subtract from 0 to reach ${state.target}.`;
+    modeMsg = `Subtraction Half Way set to D${sides}. Subtract from 0 to reach ${state.target}.`;
   } else if (state.properTurtleMode) {
     modeMsg = `Proper Turtle Mode set to D${sides}. Reach ${state.target} with triple rolls.`;
   } else {
@@ -768,7 +780,7 @@ function finishGame() {
   setMessage("You win.", "success");
   const totalTimeMs = (state.lastStepAt ?? performance.now()) - (state.startedAt ?? performance.now());
   persistPassedRun(totalTimeMs);
-  openScoreboard("Target reached", { mode: "run", totalTimeMs });
+  openRunSummary("Target reached", totalTimeMs);
 }
 
 function endGameTooHigh() {
@@ -790,7 +802,7 @@ function endGameTooHigh() {
   helperText.textContent = "That run is over. Choose another mode to try again.";
   setInputEnabled(false);
   const totalTimeMs = (state.lastStepAt ?? performance.now()) - (state.startedAt ?? performance.now());
-  openScoreboard("Run ended", { mode: "run", totalTimeMs });
+  openRunSummary("Run ended", totalTimeMs);
 }
 
 function formatSeconds(ms) {
@@ -877,82 +889,48 @@ function hideScoreboard() {
   scoreModal.setAttribute("aria-hidden", "true");
 }
 
-function openScoreboard(title, { mode = "run", totalTimeMs = 0 } = {}) {
-  if (
-    !modalTitle ||
-    !scoreTargetLabel ||
-    !scoreTarget ||
-    !scoreTimeLabel ||
-    !scoreTime ||
-    !scoreCalcSpeed ||
-    !scoreGrowthSpeed ||
-    !scorePassRuns ||
-    !graphCaption ||
-    !speedChart
-  ) {
+function renderRunRows(totalTimeMs) {
+  if (!scoreRunTable) {
     return;
   }
 
-  const aggregated = aggregatePersistedStats();
-  const calcSpeed =
-    mode === "run" ? getCalcSpeed(state.history.length, totalTimeMs) : aggregated.calcSpeed;
-  const growthSpeed =
-    mode === "run" ? getGrowthSpeed(state.total, totalTimeMs) : aggregated.growthSpeed;
+  if (state.history.length === 0) {
+    scoreRunTable.innerHTML =
+      '<p class="stats-empty">No correct answers were recorded in this run.</p>';
+    return;
+  }
 
-  state.scoreboardMode = mode;
-  modalTitle.textContent = title;
-  scoreTargetLabel.textContent = mode === "run" ? "Target" : "Saved Runs";
-  scoreTimeLabel.textContent = mode === "run" ? "Total Time" : "Saved Time";
-  scoreTarget.textContent =
-    mode === "run" ? `${state.total} / ${state.target}` : `${aggregated.runCount} pass runs`;
-  scoreTime.textContent =
-    mode === "run" ? formatSeconds(totalTimeMs) : formatSeconds(aggregated.totalTimeMs);
-  scoreCalcSpeed.textContent = `${formatDecimal(calcSpeed)} calcs/s`;
-  scoreGrowthSpeed.textContent = `${formatDecimal(growthSpeed)} nums/s`;
-  scorePassRuns.textContent = String(aggregated.runCount);
-  graphCaption.textContent =
-    mode === "run"
-      ? "Line graph shows seconds spent on each correct answer in this run."
-      : "Line graph shows the average total reached during each saved time window.";
-  updateInsightCard(
-    weakestRangeEl,
-    weakestRangeDetailEl,
-    aggregated.ranges[0],
-    "Finish a pass run to build range stats.",
-  );
-  updateInsightCard(
-    weakestTimeWindowEl,
-    weakestTimeWindowDetailEl,
-    aggregated.timeWindows[0],
-    "Finish a pass run to build time stats.",
-  );
-  updateInsightCard(
-    weakestDigitPairEl,
-    weakestDigitPairDetailEl,
-    aggregated.digitPairs[0],
-    "Finish a pass run to build digit-pair stats.",
-  );
-  renderStatsRows(rangeStatsTable, aggregated.ranges.slice(0, 8), "No saved range stats yet.");
-  renderStatsRows(timeStatsTable, aggregated.timeWindows.slice(0, 8), "No saved time-window stats yet.");
-  renderStatsRows(digitStatsTable, aggregated.digitPairs.slice(0, 10), "No saved end-digit stats yet.");
-  renderSavedRuns();
-  drawChart(mode, aggregated);
-  if (closeScoreButton) {
-    closeScoreButton.classList.toggle("hidden", mode === "run");
-  }
-  if (playAgainButton) {
-    playAgainButton.classList.toggle("hidden", mode !== "run");
-  }
-  if (changeModeButton) {
-    changeModeButton.classList.toggle("hidden", mode !== "run");
-  }
-  if (scoreModal) {
-    scoreModal.classList.remove("hidden");
-    scoreModal.setAttribute("aria-hidden", "false");
-  }
+  const averageStepMs = totalTimeMs > 0 ? totalTimeMs / state.history.length : 0;
+
+  scoreRunTable.innerHTML = state.history
+    .map((step, index) => {
+      const direction = step.growth >= 0 ? "+" : "−";
+      const growthValue = Math.abs(step.growth);
+      const comparedToAverage = averageStepMs > 0 ? step.stepMs - averageStepMs : 0;
+      let paceText = "on pace";
+
+      if (comparedToAverage > 150) {
+        paceText = `${((comparedToAverage) / 1000).toFixed(1)}s slower than avg`;
+      } else if (comparedToAverage < -150) {
+        paceText = `${(Math.abs(comparedToAverage) / 1000).toFixed(1)}s faster than avg`;
+      }
+
+      return `
+        <div class="stats-row">
+          <strong>Step ${index + 1}: ${step.fromTotal} ${direction} ${growthValue} = ${step.toTotal}</strong>
+          <span>${formatSeconds(step.stepMs)} answer time</span>
+          <span>${paceText}</span>
+        </div>
+      `;
+    })
+    .join("");
 }
 
 function drawChart(mode, aggregated) {
+  if (!speedChart) {
+    return;
+  }
+
   const ctx = speedChart.getContext("2d");
   const { width, height } = speedChart;
   const pad = { top: 20, right: 20, bottom: 36, left: 46 };
@@ -1029,9 +1007,113 @@ function drawChart(mode, aggregated) {
   ctx.rotate(-Math.PI / 2);
   ctx.fillText(mode === "run" ? "Seconds for answer" : "Average total reached", 0, 0);
   ctx.restore();
-  ctx.fillText(`0`, pad.left - 8, height - pad.bottom + 18);
+  ctx.fillText("0", pad.left - 8, height - pad.bottom + 18);
   ctx.fillText(`${maxX}`, width - pad.right - 12, height - pad.bottom + 18);
   ctx.fillText(mode === "run" ? `${(maxY / 1000).toFixed(1)}s` : `${Math.round(maxY)}`, 4, pad.top + 6);
+}
+
+function openRunSummary(title, totalTimeMs) {
+  if (
+    !scoreModal ||
+    !modalTitle ||
+    !scoreTargetLabel ||
+    !scoreTarget ||
+    !scoreTimeLabel ||
+    !scoreTime ||
+    !scoreCalcSpeed ||
+    !scoreGrowthSpeed ||
+    !scorePassRuns ||
+    !graphCaption
+  ) {
+    return;
+  }
+
+  const calcSpeed = getCalcSpeed(state.history.length, totalTimeMs);
+  const growthSpeed = getGrowthSpeed(Math.abs(state.total - state.startTotal), totalTimeMs);
+
+  state.scoreboardMode = "run";
+  modalTitle.textContent = title;
+  scoreTargetLabel.textContent = "Final Total";
+  scoreTimeLabel.textContent = "Run Time";
+  if (scorePassRunsLabel) {
+    scorePassRunsLabel.textContent = "Correct Answers";
+  }
+  scoreTarget.textContent = `${state.total} / ${state.target}`;
+  scoreTime.textContent = formatSeconds(totalTimeMs);
+  scoreCalcSpeed.textContent = `${formatDecimal(calcSpeed)} calcs/s`;
+  scoreGrowthSpeed.textContent = `${formatDecimal(growthSpeed)} nums/s`;
+  scorePassRuns.textContent = String(state.history.length);
+  graphCaption.textContent = "Line graph shows seconds spent on each correct answer in this run.";
+  renderRunRows(totalTimeMs);
+  drawChart("run", { growthTimeline: [] });
+  if (playAgainButton) {
+    playAgainButton.classList.remove("hidden");
+  }
+  if (changeModeButton) {
+    changeModeButton.classList.remove("hidden");
+  }
+  scoreModal.classList.remove("hidden");
+  scoreModal.setAttribute("aria-hidden", "false");
+}
+
+function renderStatsPage() {
+  const aggregated = aggregatePersistedStats();
+
+  if (modalTitle) {
+    modalTitle.textContent = "Saved stats";
+  }
+  if (scoreTargetLabel) {
+    scoreTargetLabel.textContent = "Saved Runs";
+  }
+  if (scoreTimeLabel) {
+    scoreTimeLabel.textContent = "Saved Time";
+  }
+  if (scorePassRunsLabel) {
+    scorePassRunsLabel.textContent = "Saved Pass Runs";
+  }
+  if (scoreTarget) {
+    scoreTarget.textContent = `${aggregated.runCount} pass runs`;
+  }
+  if (scoreTime) {
+    scoreTime.textContent = formatSeconds(aggregated.totalTimeMs);
+  }
+  if (scoreCalcSpeed) {
+    scoreCalcSpeed.textContent = `${formatDecimal(aggregated.calcSpeed)} calcs/s`;
+  }
+  if (scoreGrowthSpeed) {
+    scoreGrowthSpeed.textContent = `${formatDecimal(aggregated.growthSpeed)} nums/s`;
+  }
+  if (scorePassRuns) {
+    scorePassRuns.textContent = String(aggregated.runCount);
+  }
+  if (graphCaption) {
+    graphCaption.textContent =
+      "Line graph shows the average total reached during each saved time window.";
+  }
+
+  updateInsightCard(
+    weakestRangeEl,
+    weakestRangeDetailEl,
+    aggregated.ranges[0],
+    "Finish a pass run to build range stats.",
+  );
+  updateInsightCard(
+    weakestTimeWindowEl,
+    weakestTimeWindowDetailEl,
+    aggregated.timeWindows[0],
+    "Finish a pass run to build time stats.",
+  );
+  updateInsightCard(
+    weakestDigitPairEl,
+    weakestDigitPairDetailEl,
+    aggregated.digitPairs[0],
+    "Finish a pass run to build digit-pair stats.",
+  );
+  renderStatsRows(rangeStatsTable, aggregated.ranges.slice(0, 8), "No saved range stats yet.");
+  renderStatsRows(timeStatsTable, aggregated.timeWindows.slice(0, 8), "No saved time-window stats yet.");
+  renderStatsRows(digitStatsTable, aggregated.digitPairs.slice(0, 10), "No saved end-digit stats yet.");
+  renderSavedRuns();
+  drawChart("stats", aggregated);
 }
 
 function handleAnswer(event) {
@@ -1187,7 +1269,7 @@ if (!isStatsPage) {
       state.ghostMode = !state.ghostMode;
       ghostModeToggle.setAttribute("aria-pressed", String(state.ghostMode));
       ghostModeToggle.classList.toggle("active", state.ghostMode);
-      ghostModeToggle.textContent = state.ghostMode ? "Ghost Mode ✓" : "Ghost Mode";
+      ghostModeToggle.textContent = "Ghost Mode";
       setMessage(
         state.ghostMode
           ? "Ghost Mode on. The running total is hidden during play."
@@ -1204,14 +1286,10 @@ if (!isStatsPage) {
         if (negativeHalfwayToggle) {
           negativeHalfwayToggle.setAttribute("aria-pressed", "false");
           negativeHalfwayToggle.classList.remove("active");
-          negativeHalfwayToggle.textContent = "Neg. Half Way";
         }
       }
       subtractionModeToggle.setAttribute("aria-pressed", String(state.subtractionMode));
       subtractionModeToggle.classList.toggle("active", state.subtractionMode);
-      subtractionModeToggle.textContent = state.subtractionMode
-        ? "Subtraction ✓"
-        : "Subtraction";
       setMessage(
         state.subtractionMode
           ? "Subtraction on. Count down from the target to zero."
@@ -1228,18 +1306,14 @@ if (!isStatsPage) {
         if (subtractionModeToggle) {
           subtractionModeToggle.setAttribute("aria-pressed", "false");
           subtractionModeToggle.classList.remove("active");
-          subtractionModeToggle.textContent = "Subtraction";
         }
       }
       negativeHalfwayToggle.setAttribute("aria-pressed", String(state.negativeHalfwayMode));
       negativeHalfwayToggle.classList.toggle("active", state.negativeHalfwayMode);
-      negativeHalfwayToggle.textContent = state.negativeHalfwayMode
-        ? "Neg. Half Way ✓"
-        : "Neg. Half Way";
       setMessage(
         state.negativeHalfwayMode
-          ? "Neg. Half Way on. Subtract from 0 to reach the negative half-target."
-          : "Neg. Half Way off.",
+          ? "Subtraction Half Way on. Subtract from 0 to reach the negative half-target."
+          : "Subtraction Half Way off.",
       );
     });
   }
@@ -1271,5 +1345,5 @@ if (!isStatsPage) {
   updateVolumeDisplay();
   updateDisplay();
 } else {
-  openScoreboard("Saved stats", { mode: "stats" });
+  renderStatsPage();
 }

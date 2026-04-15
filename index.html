@@ -58,7 +58,7 @@
                 id="negative-halfway-toggle"
                 aria-pressed="false"
               >
-                Neg. Half Way
+                Subtraction Half Way
               </button>
             </div>
           </div>
@@ -223,7 +223,7 @@
               <strong id="score-growth-speed">0.00 nums/s</strong>
             </div>
             <div class="score-chip">
-              <span class="status-label">Saved Pass Runs</span>
+              <span class="status-label" id="score-pass-runs-label">Saved Pass Runs</span>
               <strong id="score-pass-runs">0</strong>
             </div>
           </div>
@@ -233,10 +233,16 @@
           <p class="graph-caption" id="graph-caption">
             Line graph shows how long each successful step took.
           </p>
+          <section class="stats-card run-stats-card">
+            <div class="stats-card-header">
+              <h3>This Run</h3>
+              <span class="status-label">Each accepted answer in order</span>
+            </div>
+            <div class="stats-table" id="score-run-table"></div>
+          </section>
           <div class="button-row">
-            <a class="secondary-button stats-link-button" href="stats.html">View Stats</a>
             <button type="button" class="primary-button" id="play-again-button">Play Again</button>
-            <button type="button" class="secondary-button" id="change-mode-button">Change Mode</button>
+            <button type="button" class="secondary-button" id="change-mode-button">Other Modes</button>
           </div>
         </div>
       </section>
