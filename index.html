@@ -59,7 +59,7 @@
                 <span class="status-label">Current Total</span>
                 <strong id="current-total">0</strong>
               </div>
-              <div class="status-card">
+              <div class="status-card" id="roll-status-card">
                 <span class="status-label" id="roll-status-label">Roll</span>
                 <div class="die-face" id="rolled-die" data-sides="">
                   <strong id="rolled-number">-</strong>
@@ -77,15 +77,21 @@
                 </div>
                 <div class="roll-panel">
                   <span class="status-label">Roll 1</span>
-                  <strong id="proper-roll-1">-</strong>
+                  <div class="die-face die-face-small" id="proper-roll-die-1" data-sides="">
+                    <strong id="proper-roll-1">-</strong>
+                  </div>
                 </div>
                 <div class="roll-panel">
                   <span class="status-label">Roll 2</span>
-                  <strong id="proper-roll-2">-</strong>
+                  <div class="die-face die-face-small" id="proper-roll-die-2" data-sides="">
+                    <strong id="proper-roll-2">-</strong>
+                  </div>
                 </div>
                 <div class="roll-panel">
                   <span class="status-label">Roll 3</span>
-                  <strong id="proper-roll-3">-</strong>
+                  <div class="die-face die-face-small" id="proper-roll-die-3" data-sides="">
+                    <strong id="proper-roll-3">-</strong>
+                  </div>
                 </div>
               </div>
             </div>
@@ -120,12 +126,30 @@
                 />
                 <span class="volume-value" id="volume-value">45%</span>
               </div>
+              <button type="button" class="secondary-button mobile-keypad-button" id="mobile-keypad-button">
+                Click if you are on mobile
+              </button>
+              <div class="keypad-wrap hidden" id="keypad-wrap" aria-label="On-page keypad">
+                <button type="button" class="keypad-button" data-keypad-value="1">1</button>
+                <button type="button" class="keypad-button" data-keypad-value="2">2</button>
+                <button type="button" class="keypad-button" data-keypad-value="3">3</button>
+                <button type="button" class="keypad-button" data-keypad-value="4">4</button>
+                <button type="button" class="keypad-button" data-keypad-value="5">5</button>
+                <button type="button" class="keypad-button" data-keypad-value="6">6</button>
+                <button type="button" class="keypad-button" data-keypad-value="7">7</button>
+                <button type="button" class="keypad-button" data-keypad-value="8">8</button>
+                <button type="button" class="keypad-button" data-keypad-value="9">9</button>
+                <button type="button" class="keypad-button keypad-button-wide" data-keypad-action="clear">Clear</button>
+                <button type="button" class="keypad-button" data-keypad-value="0">0</button>
+                <button type="button" class="keypad-button keypad-button-wide" data-keypad-action="backspace">Delete</button>
+              </div>
             </form>
 
             <p class="message" id="message-box">Choose a mode to begin.</p>
 
             <div class="button-row">
               <button type="button" class="primary-button" id="start-button">Start Game</button>
+              <button type="button" class="secondary-button" id="fullscreen-button">Full Screen</button>
               <button type="button" class="secondary-button" id="restart-button">
                 Change Mode
               </button>

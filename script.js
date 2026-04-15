@@ -6,6 +6,7 @@ const modeTurtleArt = document.getElementById("mode-turtle-art");
 const gameTurtleArt = document.getElementById("game-turtle-art");
 const modeLabel = document.getElementById("mode-label");
 const currentTotalEl = document.getElementById("current-total");
+const rollStatusCard = document.getElementById("roll-status-card");
 const turtleConfettiLayer = document.getElementById("turtle-confetti-layer");
 const winConfettiLayer = document.getElementById("win-confetti-layer");
 const rollStatusLabel = document.getElementById("roll-status-label");
@@ -20,14 +21,23 @@ const properRollEls = [
   document.getElementById("proper-roll-2"),
   document.getElementById("proper-roll-3"),
 ];
+const properRollDieEls = [
+  document.getElementById("proper-roll-die-1"),
+  document.getElementById("proper-roll-die-2"),
+  document.getElementById("proper-roll-die-3"),
+];
 const messageBox = document.getElementById("message-box");
 const startButton = document.getElementById("start-button");
+const fullscreenButton = document.getElementById("fullscreen-button");
 const restartButton = document.getElementById("restart-button");
 const answerForm = document.getElementById("answer-form");
 const answerInput = document.getElementById("answer-input");
 const submitButton = document.getElementById("submit-button");
 const volumeSlider = document.getElementById("volume-slider");
 const volumeValue = document.getElementById("volume-value");
+const mobileKeypadButton = document.getElementById("mobile-keypad-button");
+const keypadWrap = document.getElementById("keypad-wrap");
+const keypadButtons = document.querySelectorAll(".keypad-button");
 const scoreModal = document.getElementById("score-modal");
 const modalTitle = document.getElementById("modal-title");
 const scoreTarget = document.getElementById("score-target");
@@ -159,8 +169,9 @@ function clearPendingTimers() {
 
 function updateDisplay() {
   const rollTotal = state.currentRolls.length > 0 ? getCurrentRollTotal() : null;
-  currentTotalEl.textContent = state.total;
-  rolledNumberEl.textContent = rollTotal ?? "-";
+  const totalLabel = `${state.total}/${state.target}`;
+  currentTotalEl.textContent = totalLabel;
+  rolledNumberEl.textContent = state.properTurtleMode ? "-" : rollTotal ?? "-";
   modeLabel.textContent = state.modeSides
     ? state.properTurtleMode
       ? `D${state.modeSides} Proper`
@@ -168,6 +179,8 @@ function updateDisplay() {
     : "-";
   rollStatusLabel.textContent = state.properTurtleMode ? "Roll Total" : "Roll";
   rolledDieEl.dataset.sides = state.modeSides ?? "";
+  rollStatusCard.classList.toggle("hidden", state.properTurtleMode);
+  statusCards[2].classList.toggle("hidden", state.properTurtleMode);
   rolledDieEl.setAttribute(
     "aria-label",
     rollTotal === null || !state.modeSides
@@ -176,9 +189,12 @@ function updateDisplay() {
         ? `D${state.modeSides} proper turtle roll total: ${rollTotal}`
         : `D${state.modeSides} roll: ${rollTotal}`,
   );
-  properCurrentTotalEl.textContent = state.total;
+  properCurrentTotalEl.textContent = totalLabel;
   properRollEls.forEach((el, index) => {
     el.textContent = state.currentRolls[index] ?? "-";
+  });
+  properRollDieEls.forEach((el) => {
+    el.dataset.sides = state.modeSides ?? "";
   });
 }
 
@@ -198,11 +214,58 @@ function getTargetLabel() {
 function setInputEnabled(enabled) {
   answerInput.disabled = !enabled;
   submitButton.disabled = !enabled;
+  keypadButtons.forEach((button) => {
+    button.disabled = !enabled;
+  });
 
   if (enabled) {
     answerInput.focus();
   } else {
     answerInput.value = "";
+  }
+}
+
+function toggleKeypadVisibility() {
+  const willShow = keypadWrap.classList.contains("hidden");
+  keypadWrap.classList.toggle("hidden", !willShow);
+  mobileKeypadButton.textContent = willShow
+    ? "Hide on-page num pad"
+    : "Click if you are on mobile";
+}
+
+async function toggleFullscreen() {
+  const element = document.documentElement;
+  const doc = document;
+  const currentFullscreenElement =
+    doc.fullscreenElement || doc.webkitFullscreenElement || doc.msFullscreenElement;
+
+  try {
+    if (currentFullscreenElement) {
+      if (doc.exitFullscreen) {
+        await doc.exitFullscreen();
+      } else if (doc.webkitExitFullscreen) {
+        await doc.webkitExitFullscreen();
+      } else if (doc.msExitFullscreen) {
+        await doc.msExitFullscreen();
+      }
+      fullscreenButton.textContent = "Full Screen";
+      return;
+    }
+
+    if (element.requestFullscreen) {
+      await element.requestFullscreen();
+    } else if (element.webkitRequestFullscreen) {
+      await element.webkitRequestFullscreen();
+    } else if (element.msRequestFullscreen) {
+      await element.msRequestFullscreen();
+    } else {
+      setMessage("Fullscreen is not supported on this device or browser.");
+      return;
+    }
+
+    fullscreenButton.textContent = "Exit Full Screen";
+  } catch {
+    setMessage("Fullscreen was blocked by the browser.", "error");
   }
 }
 
@@ -541,6 +604,30 @@ function maybeAcceptAnswer() {
   autoRoll();
 }
 
+function handleKeypadPress(button) {
+  if (answerInput.disabled) {
+    return;
+  }
+
+  ensureAudioContext();
+
+  const action = button.dataset.keypadAction;
+  const value = button.dataset.keypadValue;
+  let nextValue = answerInput.value;
+
+  if (action === "clear") {
+    nextValue = "";
+  } else if (action === "backspace") {
+    nextValue = nextValue.slice(0, -1);
+  } else if (value) {
+    nextValue = `${nextValue}${value}`;
+  }
+
+  const maxLength = String(state.target).length + 1;
+  answerInput.value = nextValue.slice(0, maxLength);
+  maybeAcceptAnswer();
+}
+
 modeButtons.forEach((button) => {
   button.addEventListener("click", () => {
     startMode(Number.parseInt(button.dataset.sides, 10));
@@ -568,6 +655,17 @@ volumeSlider.addEventListener("input", () => {
   state.volume = Number.parseInt(volumeSlider.value, 10) / 100;
   updateVolumeDisplay();
   ensureAudioContext();
+});
+mobileKeypadButton.addEventListener("click", toggleKeypadVisibility);
+fullscreenButton.addEventListener("click", toggleFullscreen);
+keypadWrap.addEventListener("click", (event) => {
+  const button = event.target.closest(".keypad-button");
+
+  if (!button) {
+    return;
+  }
+
+  handleKeypadPress(button);
 });
 playAgainButton.addEventListener("click", () => {
   hideScoreboard();
