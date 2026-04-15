@@ -4,6 +4,8 @@ Static browser-based mental math game for practicing running totals and reviewin
 
 No build step, framework, or backend is required. The app is plain HTML, CSS, and JavaScript and can be opened locally or hosted with GitHub Pages.
 
+https://bluemoon012905.github.io/Turtle-math-benchmark/
+
 ## What It Does
 
 The player picks a die mode and repeatedly enters the new total after each roll.
