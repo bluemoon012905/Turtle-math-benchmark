@@ -1,11 +1,23 @@
 const modeScreen = document.getElementById("mode-screen");
 const gameScreen = document.getElementById("game-screen");
 const modeButtons = document.querySelectorAll(".mode-button");
+const properModeToggle = document.getElementById("proper-mode-toggle");
+const modeTurtleArt = document.getElementById("mode-turtle-art");
+const gameTurtleArt = document.getElementById("game-turtle-art");
 const modeLabel = document.getElementById("mode-label");
 const currentTotalEl = document.getElementById("current-total");
+const rollStatusLabel = document.getElementById("roll-status-label");
 const rolledNumberEl = document.getElementById("rolled-number");
+const rolledDieEl = document.getElementById("rolled-die");
 const promptText = document.getElementById("prompt-text");
 const helperText = document.getElementById("helper-text");
+const properRollGrid = document.getElementById("proper-roll-grid");
+const properCurrentTotalEl = document.getElementById("proper-current-total");
+const properRollEls = [
+  document.getElementById("proper-roll-1"),
+  document.getElementById("proper-roll-2"),
+  document.getElementById("proper-roll-3"),
+];
 const messageBox = document.getElementById("message-box");
 const startButton = document.getElementById("start-button");
 const restartButton = document.getElementById("restart-button");
@@ -24,17 +36,18 @@ const speedChart = document.getElementById("speed-chart");
 const statusCards = document.querySelectorAll(".status-card");
 
 const TARGETS = {
-  4: 70,
-  6: 100,
-  12: 200,
-  20: 300,
+  4: 35,
+  6: 50,
+  12: 100,
+  20: 150,
 };
 
 const state = {
   modeSides: null,
-  target: 100,
+  properTurtleMode: false,
+  target: 50,
   total: 0,
-  currentRoll: null,
+  currentRolls: [],
   waitingForAnswer: false,
   finished: false,
   startedAt: null,
@@ -43,6 +56,18 @@ const state = {
   rollTimerId: null,
   nextRollTimerId: null,
 };
+
+function getTargetForMode(sides) {
+  return TARGETS[sides] * (state.properTurtleMode ? 2 : 1);
+}
+
+function getRollCount() {
+  return state.properTurtleMode ? 3 : 1;
+}
+
+function getCurrentRollTotal() {
+  return state.currentRolls.reduce((sum, roll) => sum + roll, 0);
+}
 
 function setMessage(text, type = "") {
   messageBox.textContent = text;
@@ -66,14 +91,37 @@ function clearPendingTimers() {
 }
 
 function updateDisplay() {
+  const rollTotal = state.currentRolls.length > 0 ? getCurrentRollTotal() : null;
   currentTotalEl.textContent = state.total;
-  rolledNumberEl.textContent = state.currentRoll ?? "-";
-  modeLabel.textContent = state.modeSides ? `D${state.modeSides}` : "-";
+  rolledNumberEl.textContent = rollTotal ?? "-";
+  modeLabel.textContent = state.modeSides
+    ? state.properTurtleMode
+      ? `D${state.modeSides} Proper`
+      : `D${state.modeSides}`
+    : "-";
+  rollStatusLabel.textContent = state.properTurtleMode ? "Roll Total" : "Roll";
+  rolledDieEl.dataset.sides = state.modeSides ?? "";
+  rolledDieEl.setAttribute(
+    "aria-label",
+    rollTotal === null || !state.modeSides
+      ? "Die result pending"
+      : state.properTurtleMode
+        ? `D${state.modeSides} proper turtle roll total: ${rollTotal}`
+        : `D${state.modeSides} roll: ${rollTotal}`,
+  );
+  properCurrentTotalEl.textContent = state.total;
+  properRollEls.forEach((el, index) => {
+    el.textContent = state.currentRolls[index] ?? "-";
+  });
 }
 
 function resetRoundPrompt() {
   promptText.textContent = "Press start to begin.";
-  helperText.textContent = "The die will roll automatically after you start.";
+  helperText.textContent = state.properTurtleMode
+    ? "Proper Turtle Mode rolls three dice at once."
+    : "The die will roll automatically after you start.";
+  promptText.classList.toggle("hidden", state.properTurtleMode);
+  properRollGrid.classList.toggle("hidden", !state.properTurtleMode);
 }
 
 function getTargetLabel() {
@@ -91,12 +139,24 @@ function setInputEnabled(enabled) {
   }
 }
 
+function applyProperModeTheme() {
+  document.body.classList.toggle("proper-turtle-mode", state.properTurtleMode);
+  properModeToggle.setAttribute("aria-pressed", String(state.properTurtleMode));
+  properModeToggle.classList.toggle("active", state.properTurtleMode);
+  properModeToggle.textContent = state.properTurtleMode
+    ? "Proper Turtle Mode ✓"
+    : "Proper Turtle Mode";
+  const turtleSrc = state.properTurtleMode ? "turtle_turtle.png" : "turtle.png";
+  modeTurtleArt.src = turtleSrc;
+  gameTurtleArt.src = turtleSrc;
+}
+
 function startMode(sides) {
   clearPendingTimers();
   state.modeSides = sides;
-  state.target = TARGETS[sides];
+  state.target = getTargetForMode(sides);
   state.total = 0;
-  state.currentRoll = null;
+  state.currentRolls = [];
   state.waitingForAnswer = false;
   state.finished = false;
   state.startedAt = null;
@@ -105,8 +165,13 @@ function startMode(sides) {
 
   updateDisplay();
   resetRoundPrompt();
+  answerInput.max = String(state.target);
   setInputEnabled(false);
-  setMessage(`Mode set to D${sides}. Reach ${state.target}.`);
+  setMessage(
+    state.properTurtleMode
+      ? `Proper Turtle Mode set to D${sides}. Reach ${state.target} with triple rolls.`
+      : `Mode set to D${sides}. Reach ${state.target}.`,
+  );
   startButton.disabled = false;
   startButton.textContent = "Start Game";
   setRolling(false);
@@ -127,6 +192,15 @@ function leaveGame() {
 
 function setRolling(active) {
   statusCards[2].classList.toggle("rolling", active);
+
+  if (!active) {
+    rolledDieEl.classList.remove("rolling");
+    return;
+  }
+
+  rolledDieEl.classList.remove("rolling");
+  void rolledDieEl.offsetWidth;
+  rolledDieEl.classList.add("rolling");
 }
 
 function beginRun() {
@@ -146,30 +220,33 @@ function autoRoll() {
     return;
   }
 
+  state.currentRolls = Array.from(
+    { length: getRollCount() },
+    () => Math.floor(Math.random() * state.modeSides) + 1,
+  );
+  state.waitingForAnswer = true;
+  updateDisplay();
   setRolling(true);
-  rolledNumberEl.textContent = "...";
-  promptText.textContent = "Rolling...";
-  helperText.textContent = "Watch the die, then type the new total.";
-  setInputEnabled(false);
-
-  state.rollTimerId = window.setTimeout(() => {
-    state.currentRoll = Math.floor(Math.random() * state.modeSides) + 1;
-    state.waitingForAnswer = true;
-    state.rollTimerId = null;
-    setRolling(false);
-    updateDisplay();
-    promptText.textContent = `${state.total} + ${state.currentRoll} = ?`;
-    helperText.textContent = `Reach exactly ${getTargetLabel()} in D${state.modeSides}.`;
-    setInputEnabled(true);
-    setMessage("Type the new total. It will accept automatically when correct.");
-  }, 520);
+  if (!state.properTurtleMode) {
+    promptText.textContent = `${state.total} + ${getCurrentRollTotal()} = ?`;
+  }
+  helperText.textContent = state.properTurtleMode
+    ? `Current total and all three rolls are shown below. Reach exactly ${getTargetLabel()}.`
+    : `Reach exactly ${getTargetLabel()} in D${state.modeSides}.`;
+  setInputEnabled(true);
+  setMessage("Type the new total. It will accept automatically when correct.");
 }
 
 function finishGame() {
   state.finished = true;
   state.waitingForAnswer = false;
+  state.currentRolls = [];
+  setRolling(false);
+  updateDisplay();
 
   promptText.textContent = `You reached ${state.target}.`;
+  promptText.classList.remove("hidden");
+  properRollGrid.classList.add("hidden");
   helperText.textContent = "The game is over. Choose another mode to play again.";
   setInputEnabled(false);
   setMessage("You win.", "success");
@@ -179,8 +256,13 @@ function finishGame() {
 function endGameTooHigh() {
   state.finished = true;
   state.waitingForAnswer = false;
+  state.currentRolls = [];
+  setRolling(false);
+  updateDisplay();
 
   promptText.textContent = `You went past ${state.target}.`;
+  promptText.classList.remove("hidden");
+  properRollGrid.classList.add("hidden");
   helperText.textContent = "That run is over. Choose another mode to try again.";
   setInputEnabled(false);
   setMessage(`Too high. Your total reached ${state.total}.`, "error");
@@ -243,7 +325,7 @@ function drawChart() {
 
   if (points.length === 0) {
     ctx.fillStyle = "#95aab3";
-    ctx.font = "16px Georgia";
+    ctx.font = "16px Roboto";
     ctx.fillText("No successful steps recorded.", pad.left + 10, height / 2);
     return;
   }
@@ -284,7 +366,7 @@ function drawChart() {
   });
 
   ctx.fillStyle = "#95aab3";
-  ctx.font = "14px Georgia";
+  ctx.font = "14px Roboto";
   ctx.fillText("Total", width / 2 - 10, height - 10);
   ctx.save();
   ctx.translate(16, height / 2 + 20);
@@ -301,12 +383,13 @@ function handleAnswer(event) {
 }
 
 function maybeAcceptAnswer() {
-  if (!state.waitingForAnswer || state.currentRoll === null || state.finished) {
+  if (!state.waitingForAnswer || state.currentRolls.length === 0 || state.finished) {
     return;
   }
 
   const guessedTotal = Number.parseInt(answerInput.value, 10);
-  const correctTotal = state.total + state.currentRoll;
+  const rollTotal = getCurrentRollTotal();
+  const correctTotal = state.total + rollTotal;
 
   if (Number.isNaN(guessedTotal)) {
     setMessage("Type the new total. It will accept automatically when correct.");
@@ -319,14 +402,15 @@ function maybeAcceptAnswer() {
   }
 
   if (guessedTotal > correctTotal) {
-    setMessage(`Too high. ${state.total} + ${state.currentRoll} is smaller than ${guessedTotal}.`, "error");
+    setMessage(`Too high. ${state.total} + ${rollTotal} is smaller than ${guessedTotal}.`, "error");
     return;
   }
 
   recordStep(correctTotal);
   state.total = correctTotal;
-  state.currentRoll = null;
+  state.currentRolls = [];
   state.waitingForAnswer = false;
+  setRolling(false);
   updateDisplay();
   flashSuccess();
   answerInput.value = "";
@@ -342,19 +426,24 @@ function maybeAcceptAnswer() {
     return;
   }
 
-  promptText.textContent = `Correct. Current total: ${state.total}`;
-  helperText.textContent = "Rolling the next die...";
-  setMessage("Correct.", "success");
-  state.nextRollTimerId = window.setTimeout(() => {
-    state.nextRollTimerId = null;
-    autoRoll();
-  }, 320);
+  autoRoll();
 }
 
 modeButtons.forEach((button) => {
   button.addEventListener("click", () => {
     startMode(Number.parseInt(button.dataset.sides, 10));
   });
+});
+
+properModeToggle.addEventListener("click", () => {
+  state.properTurtleMode = !state.properTurtleMode;
+  applyProperModeTheme();
+  resetRoundPrompt();
+  setMessage(
+    state.properTurtleMode
+      ? "Proper Turtle Mode is on. Buttons turn red and each turn rolls three dice."
+      : "Proper Turtle Mode is off. Standard single-roll rules are active.",
+  );
 });
 
 startButton.addEventListener("click", beginRun);
@@ -367,4 +456,5 @@ playAgainButton.addEventListener("click", () => {
 });
 changeModeButton.addEventListener("click", leaveGame);
 
+applyProperModeTheme();
 updateDisplay();

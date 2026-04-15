@@ -7,6 +7,7 @@
   --accent: #2fcf8f;
   --accent-dark: #12855a;
   --accent-soft: rgba(47, 207, 143, 0.16);
+  --button-text: #08120d;
   --success: #63f4b0;
   --error: #ff7777;
   --shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
@@ -19,12 +20,27 @@
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Roboto", sans-serif;
   color: var(--text);
   background:
     radial-gradient(circle at top left, rgba(46, 160, 120, 0.2), transparent 34%),
     radial-gradient(circle at bottom right, rgba(24, 65, 103, 0.24), transparent 28%),
     linear-gradient(135deg, #071016 0%, #101921 52%, #0b141b 100%);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: -20%;
+  opacity: 0;
+  pointer-events: none;
+  background-image: url("turtle_headphone.png");
+  background-repeat: repeat;
+  background-size: 220px auto;
+  background-position: 0 0;
+  transform: rotate(-18deg) scale(1.1);
+  transition: opacity 220ms ease;
+  z-index: 0;
 }
 
 .app-shell {
@@ -34,6 +50,8 @@ body {
   min-height: 100vh;
   display: flex;
   align-items: center;
+  position: relative;
+  z-index: 1;
 }
 
 .panel {
@@ -74,6 +92,16 @@ body {
   color: var(--muted);
 }
 
+.proper-toggle {
+  margin-bottom: 18px;
+}
+
+.proper-toggle.active {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+  color: var(--button-text);
+  box-shadow: 0 12px 24px rgba(18, 133, 90, 0.25);
+}
+
 .mode-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(120px, 1fr));
@@ -97,7 +125,7 @@ body {
 
 .mode-button,
 .primary-button {
-  color: #08120d;
+  color: var(--button-text);
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
   box-shadow: 0 12px 24px rgba(18, 133, 90, 0.25);
 }
@@ -175,6 +203,71 @@ body {
 
 .status-card strong {
   font-size: clamp(1.5rem, 2.2vw, 2rem);
+}
+
+.proper-roll-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.roll-panel {
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.roll-panel strong {
+  display: block;
+  font-size: clamp(1.6rem, 2.4vw, 2.3rem);
+}
+
+.die-face {
+  --die-size: clamp(72px, 9vw, 104px);
+  position: relative;
+  width: var(--die-size);
+  aspect-ratio: 1 / 1;
+  display: grid;
+  place-items: center;
+  margin-top: 6px;
+  color: #08120d;
+  background: linear-gradient(135deg, #95ffd0 0%, var(--accent) 55%, var(--accent-dark) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 14px 30px rgba(10, 31, 23, 0.4);
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    filter 140ms ease;
+}
+
+.die-face strong {
+  position: relative;
+  z-index: 1;
+  font-size: clamp(1.6rem, 2.4vw, 2.2rem);
+  line-height: 1;
+}
+
+.die-face[data-sides="4"] {
+  clip-path: polygon(50% 4%, 5% 96%, 95% 96%);
+}
+
+.die-face[data-sides="6"] {
+  border-radius: 18px;
+}
+
+.die-face[data-sides="12"] {
+  clip-path: polygon(50% 3%, 95% 36%, 77% 94%, 23% 94%, 5% 36%);
+}
+
+.die-face[data-sides="20"] {
+  clip-path: polygon(25% 6%, 75% 6%, 96% 50%, 75% 94%, 25% 94%, 4% 50%);
+}
+
+.die-face.rolling {
+  animation: die-pop 220ms ease;
 }
 
 .prompt-card {
@@ -255,10 +348,6 @@ body {
   transform: scale(1.01);
 }
 
-.status-card.rolling strong {
-  animation: roll-pulse 520ms ease-in-out infinite;
-}
-
 .modal {
   position: fixed;
   inset: 0;
@@ -329,16 +418,49 @@ body {
   }
 }
 
-@keyframes roll-pulse {
-  0%,
-  100% {
-    opacity: 0.48;
-    transform: translateY(0);
+@keyframes die-pop {
+  0% {
+    transform: scale(0.92);
+    filter: brightness(0.94);
   }
 
-  50% {
-    opacity: 1;
-    transform: translateY(-2px);
+  65% {
+    transform: scale(1.04);
+    filter: brightness(1.08);
+  }
+
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+body.proper-turtle-mode {
+  --accent: #ff6666;
+  --accent-dark: #b61f34;
+  --accent-soft: rgba(255, 102, 102, 0.2);
+  --button-text: #fff3f1;
+  --success: #ffb0b0;
+}
+
+body.proper-turtle-mode::before {
+  opacity: 0.12;
+  animation: turtle-scan 14s linear infinite;
+}
+
+body.proper-turtle-mode .secondary-button {
+  color: var(--button-text);
+  background: linear-gradient(135deg, rgba(255, 102, 102, 0.9) 0%, rgba(182, 31, 52, 0.9) 100%);
+  box-shadow: 0 12px 24px rgba(130, 18, 34, 0.28);
+}
+
+@keyframes turtle-scan {
+  0% {
+    background-position: 0 0;
+  }
+
+  100% {
+    background-position: 320px 520px;
   }
 }
 
@@ -350,6 +472,10 @@ body {
 
   .turtle-side {
     order: -1;
+  }
+
+  .proper-roll-grid {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
   }
 }
 
@@ -366,6 +492,7 @@ body {
 
   .status-row,
   .mode-grid,
+  .proper-roll-grid,
   .score-grid {
     grid-template-columns: 1fr;
   }
