@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Turtle 100</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="panel mode-panel" id="mode-screen">
+        <div class="panel-copy">
+          <p class="eyebrow">Turtle Math</p>
+          <h1>Reach 100 exactly by adding each dice roll.</h1>
+          <p class="intro">
+            Pick a dice mode, then enter the new total after each roll. The turtle watches
+            from the side until you hit 100.
+          </p>
+          <div class="mode-grid">
+            <button class="mode-button" data-sides="4">D4</button>
+            <button class="mode-button" data-sides="6">D6</button>
+            <button class="mode-button" data-sides="12">D12</button>
+            <button class="mode-button" data-sides="20">D20</button>
+          </div>
+        </div>
+        <div class="turtle-wrap">
+          <img src="turtle.png" alt="Game turtle" class="turtle-art" />
+        </div>
+      </section>
+
+      <section class="panel game-panel hidden" id="game-screen">
+        <div class="game-layout">
+          <aside class="turtle-side">
+            <img src="turtle.png" alt="Game turtle" class="turtle-art" />
+          </aside>
+
+          <div class="game-main">
+            <div class="status-row">
+              <div class="status-card">
+                <span class="status-label">Mode</span>
+                <strong id="mode-label">D6</strong>
+              </div>
+              <div class="status-card">
+                <span class="status-label">Current Total</span>
+                <strong id="current-total">0</strong>
+              </div>
+              <div class="status-card">
+                <span class="status-label">Roll</span>
+                <strong id="rolled-number">-</strong>
+              </div>
+            </div>
+
+            <div class="prompt-card">
+              <h2 id="prompt-text">Press start to begin.</h2>
+              <p id="helper-text">The die will roll automatically after you start.</p>
+            </div>
+
+            <form id="answer-form" class="answer-form" autocomplete="off">
+              <label for="answer-input">Enter the new total</label>
+              <div class="answer-row">
+                <input
+                  id="answer-input"
+                  name="answer"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  min="0"
+                  max="300"
+                  type="number"
+                  placeholder="Type the total"
+                  disabled
+                />
+                <button type="submit" class="primary-button hidden" disabled id="submit-button">
+                  Hidden Submit
+                </button>
+              </div>
+            </form>
+
+            <p class="message" id="message-box">Choose a mode to begin.</p>
+
+            <div class="button-row">
+              <button type="button" class="primary-button" id="start-button">Start Game</button>
+              <button type="button" class="secondary-button" id="restart-button">
+                Change Mode
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="modal hidden" id="score-modal" aria-hidden="true">
+        <div class="modal-card">
+          <p class="eyebrow">Run Complete</p>
+          <h2 id="modal-title">Scoreboard</h2>
+          <div class="score-grid">
+            <div class="score-chip">
+              <span class="status-label">Target</span>
+              <strong id="score-target">100</strong>
+            </div>
+            <div class="score-chip">
+              <span class="status-label">Total Time</span>
+              <strong id="score-time">0.0s</strong>
+            </div>
+            <div class="score-chip">
+              <span class="status-label">Average Speed</span>
+              <strong id="score-speed">0.00 nums/s</strong>
+            </div>
+          </div>
+          <div class="graph-wrap">
+            <canvas id="speed-chart" width="720" height="320"></canvas>
+          </div>
+          <p class="graph-caption" id="graph-caption">
+            Line graph shows how long each successful step took.
+          </p>
+          <div class="button-row">
+            <button type="button" class="primary-button" id="play-again-button">Play Again</button>
+            <button type="button" class="secondary-button" id="change-mode-button">Change Mode</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
