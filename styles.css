@@ -576,6 +576,63 @@ body.proper-turtle-mode .status-row {
   padding: 32px;
 }
 
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.filter-pill {
+  padding: 7px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background 120ms,
+    color 120ms,
+    border-color 120ms;
+}
+
+.filter-pill:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+.filter-pill.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.filter-pill-proper {
+  border-color: rgba(255, 102, 102, 0.25);
+  color: rgba(255, 102, 102, 0.7);
+}
+
+.filter-pill-proper:hover {
+  background: rgba(255, 102, 102, 0.1);
+  color: #ff6666;
+}
+
+.filter-pill-proper.active {
+  background: rgba(255, 102, 102, 0.15);
+  border-color: #ff6666;
+  color: #ff6666;
+}
+
+.filter-divider {
+  width: 1px;
+  align-self: stretch;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 2px 4px;
+}
+
 .stats-page-header {
   display: flex;
   justify-content: space-between;
@@ -600,6 +657,12 @@ body.proper-turtle-mode .status-row {
   background: rgba(255, 255, 255, 0.06);
   border-radius: 18px;
   padding: 16px;
+}
+
+.stats-mode-label {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .graph-wrap {

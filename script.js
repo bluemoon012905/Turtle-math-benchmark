@@ -72,6 +72,7 @@ const changeModeButton = document.getElementById("change-mode-button");
 const speedChart = document.getElementById("speed-chart");
 const statusCards = document.querySelectorAll(".status-card");
 const isStatsPage = Boolean(document.querySelector(".stats-page-panel"));
+const statsModeLabel = document.getElementById("stats-mode-label");
 
 const STATS_STORAGE_KEY = "turtle-math-stats-v1";
 const MAX_SAVED_RUNS = 40;
@@ -110,6 +111,7 @@ let audioContext = null;
 let masterGainNode = null;
 let persistedStats = loadPersistedStats();
 let activeChartData = null;
+let statsFilter = null;
 
 function loadPersistedStats() {
   try {
@@ -213,7 +215,17 @@ function finalizeBucketSummaries(collection) {
     .sort((left, right) => right.averageMs - left.averageMs);
 }
 
-function aggregatePersistedStats() {
+function getFilteredRuns(filter) {
+  if (filter == null) return persistedStats.runs;
+  if (filter.endsWith("-proper")) {
+    const sides = Number.parseInt(filter, 10);
+    return persistedStats.runs.filter((r) => r.modeSides === sides && r.properTurtleMode);
+  }
+  const sides = Number.parseInt(filter, 10);
+  return persistedStats.runs.filter((r) => r.modeSides === sides && !r.properTurtleMode);
+}
+
+function aggregatePersistedStats(filter) {
   const rangeBuckets = new Map();
   const timeBuckets = new Map();
   const digitBuckets = new Map();
@@ -221,8 +233,9 @@ function aggregatePersistedStats() {
   let totalSteps = 0;
   let totalNumbers = 0;
   let totalTimeMs = 0;
+  const runs = getFilteredRuns(filter);
 
-  persistedStats.runs.forEach((run) => {
+  runs.forEach((run) => {
     totalSteps += run.steps.length;
     totalNumbers += run.total;
     totalTimeMs += run.totalTimeMs;
@@ -265,7 +278,7 @@ function aggregatePersistedStats() {
   });
 
   return {
-    runCount: persistedStats.runs.length,
+    runCount: runs.length,
     totalSteps,
     totalNumbers,
     totalTimeMs,
@@ -321,18 +334,20 @@ function renderStatsRows(container, rows, emptyText) {
     .join("");
 }
 
-function renderSavedRuns() {
+function renderSavedRuns(filteredRuns) {
   if (!savedRunsTable) {
     return;
   }
 
-  if (persistedStats.runs.length === 0) {
+  const runs = filteredRuns ?? persistedStats.runs;
+
+  if (runs.length === 0) {
     savedRunsTable.innerHTML =
-      '<p class="stats-empty">No pass runs saved on this device yet.</p>';
+      '<p class="stats-empty">No pass runs for this filter yet.</p>';
     return;
   }
 
-  savedRunsTable.innerHTML = persistedStats.runs
+  savedRunsTable.innerHTML = runs
     .slice()
     .reverse()
     .map((run) => {
@@ -1110,20 +1125,30 @@ function openRunSummary(title, totalTimeMs) {
   scoreModal.setAttribute("aria-hidden", "false");
 }
 
-function renderStatsPage() {
-  const aggregated = aggregatePersistedStats();
+function getFilterLabel(filter) {
+  if (filter == null) return "All Modes";
+  if (filter.endsWith("-proper")) return `D${Number.parseInt(filter, 10)} Proper Turtle`;
+  return `D${Number.parseInt(filter, 10)}`;
+}
+
+function renderStatsPage(filter) {
+  const aggregated = aggregatePersistedStats(filter);
+
+  if (statsModeLabel) {
+    statsModeLabel.textContent = getFilterLabel(filter);
+  }
 
   if (modalTitle) {
     modalTitle.textContent = "Saved stats";
   }
   if (scoreTargetLabel) {
-    scoreTargetLabel.textContent = "Saved Runs";
+    scoreTargetLabel.textContent = "Pass Runs";
   }
   if (scoreTimeLabel) {
-    scoreTimeLabel.textContent = "Saved Time";
+    scoreTimeLabel.textContent = "Practice Time";
   }
   if (scorePassRunsLabel) {
-    scorePassRunsLabel.textContent = "Saved Pass Runs";
+    scorePassRunsLabel.textContent = "Total Steps";
   }
   if (scoreTarget) {
     scoreTarget.textContent = `${aggregated.runCount} pass runs`;
@@ -1138,7 +1163,7 @@ function renderStatsPage() {
     scoreGrowthSpeed.textContent = `${formatDecimal(aggregated.growthSpeed)} nums/s`;
   }
   if (scorePassRuns) {
-    scorePassRuns.textContent = String(aggregated.runCount);
+    scorePassRuns.textContent = String(aggregated.totalSteps);
   }
   if (graphCaption) {
     graphCaption.textContent =
@@ -1166,7 +1191,7 @@ function renderStatsPage() {
   renderStatsRows(rangeStatsTable, aggregated.ranges.slice(0, 8), "No saved range stats yet.");
   renderStatsRows(timeStatsTable, aggregated.timeWindows.slice(0, 8), "No saved time-window stats yet.");
   renderStatsRows(digitStatsTable, aggregated.digitPairs.slice(0, 10), "No saved end-digit stats yet.");
-  renderSavedRuns();
+  renderSavedRuns(getFilteredRuns(filter));
   drawChart("stats", aggregated);
 }
 
@@ -1433,5 +1458,16 @@ if (!isStatsPage) {
   updateVolumeDisplay();
   updateDisplay();
 } else {
-  renderStatsPage();
+  const filterPills = document.querySelectorAll(".filter-pill");
+  filterPills.forEach((pill) => {
+    pill.addEventListener("click", () => {
+      filterPills.forEach((p) => p.classList.remove("active"));
+      pill.classList.add("active");
+      const raw = pill.dataset.filter;
+      statsFilter = raw === "" ? null : raw;
+      renderStatsPage(statsFilter);
+    });
+  });
+
+  renderStatsPage(statsFilter);
 }

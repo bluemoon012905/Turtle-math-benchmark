@@ -29,13 +29,27 @@
           </div>
         </div>
 
+        <div class="filter-row" id="stats-filter-row">
+          <button class="filter-pill active" data-filter="">All</button>
+          <span class="filter-divider"></span>
+          <button class="filter-pill" data-filter="4">D4</button>
+          <button class="filter-pill" data-filter="6">D6</button>
+          <button class="filter-pill" data-filter="12">D12</button>
+          <button class="filter-pill" data-filter="20">D20</button>
+          <span class="filter-divider"></span>
+          <button class="filter-pill filter-pill-proper" data-filter="4-proper">D4 Proper</button>
+          <button class="filter-pill filter-pill-proper" data-filter="6-proper">D6 Proper</button>
+          <button class="filter-pill filter-pill-proper" data-filter="12-proper">D12 Proper</button>
+          <button class="filter-pill filter-pill-proper" data-filter="20-proper">D20 Proper</button>
+        </div>
+
         <div class="score-grid">
           <div class="score-chip">
             <span class="status-label" id="score-target-label">Saved Runs</span>
             <strong id="score-target">0 pass runs</strong>
           </div>
           <div class="score-chip">
-            <span class="status-label" id="score-time-label">Saved Time</span>
+            <span class="status-label" id="score-time-label">Practice Time</span>
             <strong id="score-time">0.0s</strong>
           </div>
           <div class="score-chip">
@@ -47,10 +61,12 @@
             <strong id="score-growth-speed">0.00 nums/s</strong>
           </div>
           <div class="score-chip">
-            <span class="status-label" id="score-pass-runs-label">Saved Pass Runs</span>
+            <span class="status-label" id="score-pass-runs-label">Total Steps</span>
             <strong id="score-pass-runs">0</strong>
           </div>
         </div>
+
+        <p class="stats-mode-label" id="stats-mode-label">All Modes</p>
 
         <div class="graph-wrap">
           <canvas id="speed-chart" width="720" height="320"></canvas>
