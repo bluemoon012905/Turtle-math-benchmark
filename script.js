@@ -109,6 +109,7 @@ const state = {
 let audioContext = null;
 let masterGainNode = null;
 let persistedStats = loadPersistedStats();
+let activeChartData = null;
 
 function loadPersistedStats() {
   try {
@@ -926,7 +927,7 @@ function renderRunRows(totalTimeMs) {
     .join("");
 }
 
-function drawChart(mode, aggregated) {
+function drawChart(mode, aggregated, hoveredIndex = -1) {
   if (!speedChart) {
     return;
   }
@@ -934,12 +935,9 @@ function drawChart(mode, aggregated) {
   const ctx = speedChart.getContext("2d");
   const { width, height } = speedChart;
   const pad = { top: 20, right: 20, bottom: 36, left: 46 };
-  const points =
+  const rawPoints =
     mode === "run"
-      ? state.history.map((point) => ({
-          xValue: point.toTotal,
-          yValue: point.stepMs,
-        }))
+      ? state.history.map((step) => ({ xValue: step.toTotal, yValue: step.stepMs }))
       : aggregated.growthTimeline.map((point, index) => ({
           xValue: index + 1,
           yValue: point.averageReached,
@@ -957,7 +955,7 @@ function drawChart(mode, aggregated) {
   ctx.lineTo(width - pad.right, height - pad.bottom);
   ctx.stroke();
 
-  if (points.length === 0) {
+  if (rawPoints.length === 0) {
     ctx.fillStyle = "#95aab3";
     ctx.font = "16px Roboto";
     ctx.fillText("No saved stats recorded yet.", pad.left + 10, height / 2);
@@ -966,36 +964,35 @@ function drawChart(mode, aggregated) {
 
   const maxX =
     mode === "run"
-      ? Math.max(...points.map((point) => point.xValue), state.target)
-      : Math.max(points.length, 1);
+      ? Math.max(...rawPoints.map((p) => p.xValue), state.target)
+      : Math.max(rawPoints.length, 1);
   const maxY =
     mode === "run"
-      ? Math.max(...points.map((point) => point.yValue), 1000)
-      : Math.max(...points.map((point) => point.yValue), 10);
+      ? Math.max(...rawPoints.map((p) => p.yValue), 1000)
+      : Math.max(...rawPoints.map((p) => p.yValue), 10);
+
+  const plotPoints = rawPoints.map((p) => ({
+    ...p,
+    x: pad.left + (p.xValue / maxX) * (width - pad.left - pad.right),
+    y: height - pad.bottom - (p.yValue / maxY) * (height - pad.top - pad.bottom),
+  }));
+
+  activeChartData = { mode, aggregated, plotPoints, hoveredIndex };
 
   ctx.strokeStyle = "#2fcf8f";
   ctx.lineWidth = 3;
   ctx.beginPath();
-
-  points.forEach((point, index) => {
-    const x = pad.left + (point.xValue / maxX) * (width - pad.left - pad.right);
-    const y = height - pad.bottom - (point.yValue / maxY) * (height - pad.top - pad.bottom);
-
-    if (index === 0) {
-      ctx.moveTo(x, y);
-    } else {
-      ctx.lineTo(x, y);
-    }
+  plotPoints.forEach((p, index) => {
+    if (index === 0) ctx.moveTo(p.x, p.y);
+    else ctx.lineTo(p.x, p.y);
   });
-
   ctx.stroke();
 
-  ctx.fillStyle = "#63f4b0";
-  points.forEach((point) => {
-    const x = pad.left + (point.xValue / maxX) * (width - pad.left - pad.right);
-    const y = height - pad.bottom - (point.yValue / maxY) * (height - pad.top - pad.bottom);
+  plotPoints.forEach((p, index) => {
+    const hovered = index === hoveredIndex;
+    ctx.fillStyle = hovered ? "#ffffff" : "#63f4b0";
     ctx.beginPath();
-    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, hovered ? 6 : 4, 0, Math.PI * 2);
     ctx.fill();
   });
 
@@ -1010,6 +1007,63 @@ function drawChart(mode, aggregated) {
   ctx.fillText("0", pad.left - 8, height - pad.bottom + 18);
   ctx.fillText(`${maxX}`, width - pad.right - 12, height - pad.bottom + 18);
   ctx.fillText(mode === "run" ? `${(maxY / 1000).toFixed(1)}s` : `${Math.round(maxY)}`, 4, pad.top + 6);
+
+  if (hoveredIndex >= 0 && hoveredIndex < plotPoints.length) {
+    drawChartTooltip(ctx, hoveredIndex, plotPoints, mode, width, height, pad);
+  }
+}
+
+function drawChartTooltip(ctx, index, plotPoints, mode, width, height, pad) {
+  const p = plotPoints[index];
+
+  let lines;
+  if (mode === "run") {
+    const step = state.history[index];
+    const op = isSubtractingMode() ? "−" : "+";
+    lines = [
+      `Answer ${index + 1}`,
+      `${step.fromTotal} ${op} ${Math.abs(step.growth)} = ${step.toTotal}`,
+      `${(step.stepMs / 1000).toFixed(2)}s`,
+    ];
+  } else {
+    lines = [`Window ${index + 1}`, `avg reached: ${Math.round(p.yValue)}`];
+  }
+
+  const lineH = 18;
+  const px = 10;
+  const py = 8;
+  ctx.font = "bold 13px Roboto";
+  const tipW = Math.max(...lines.map((l) => ctx.measureText(l).width)) + px * 2;
+  const tipH = lines.length * lineH + py * 2;
+
+  let tx = p.x + 12;
+  let ty = p.y - tipH - 12;
+  if (tx + tipW > width - pad.right) tx = p.x - tipW - 12;
+  if (ty < pad.top) ty = p.y + 14;
+
+  const r = 6;
+  ctx.fillStyle = "rgba(5, 14, 20, 0.94)";
+  ctx.strokeStyle = "rgba(47, 207, 143, 0.45)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(tx + r, ty);
+  ctx.lineTo(tx + tipW - r, ty);
+  ctx.arcTo(tx + tipW, ty, tx + tipW, ty + r, r);
+  ctx.lineTo(tx + tipW, ty + tipH - r);
+  ctx.arcTo(tx + tipW, ty + tipH, tx + tipW - r, ty + tipH, r);
+  ctx.lineTo(tx + r, ty + tipH);
+  ctx.arcTo(tx, ty + tipH, tx, ty + tipH - r, r);
+  ctx.lineTo(tx, ty + r);
+  ctx.arcTo(tx, ty, tx + r, ty, r);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  lines.forEach((line, i) => {
+    ctx.fillStyle = i === 0 ? "#edf4f6" : "#95aab3";
+    ctx.font = i === 0 ? "bold 13px Roboto" : "13px Roboto";
+    ctx.fillText(line, tx + px, ty + py + (i + 1) * lineH - 3);
+  });
 }
 
 function openRunSummary(title, totalTimeMs) {
@@ -1339,6 +1393,40 @@ if (!isStatsPage) {
   }
   if (changeModeButton) {
     changeModeButton.addEventListener("click", leaveGame);
+  }
+
+  if (speedChart) {
+    speedChart.addEventListener("mousemove", (e) => {
+      if (!activeChartData) return;
+      const rect = speedChart.getBoundingClientRect();
+      const scaleX = speedChart.width / rect.width;
+      const scaleY = speedChart.height / rect.height;
+      const mx = (e.clientX - rect.left) * scaleX;
+      const my = (e.clientY - rect.top) * scaleY;
+
+      let closest = -1;
+      let minDist = 18;
+      activeChartData.plotPoints.forEach((p, i) => {
+        const dist = Math.hypot(mx - p.x, my - p.y);
+        if (dist < minDist) {
+          minDist = dist;
+          closest = i;
+        }
+      });
+
+      speedChart.style.cursor = closest >= 0 ? "pointer" : "default";
+
+      if (closest !== activeChartData.hoveredIndex) {
+        drawChart(activeChartData.mode, activeChartData.aggregated, closest);
+      }
+    });
+
+    speedChart.addEventListener("mouseleave", () => {
+      if (activeChartData && activeChartData.hoveredIndex !== -1) {
+        speedChart.style.cursor = "default";
+        drawChart(activeChartData.mode, activeChartData.aggregated, -1);
+      }
+    });
   }
 
   applyProperModeTheme();
